@@ -54,7 +54,13 @@ def fetch_pubmed_papers(keywords, journal, max_results=5):
     """
     journal_queries = {
         "PLOS Pathogens": '"PLoS Pathog"[Journal] OR "PLOS Pathogens"[Journal]',
-        "International Journal for Parasitology (IJP)": '"Int J Parasitol"[Journal] OR "International Journal for Parasitology"[Journal]'
+        "International Journal for Parasitology (IJP)": '"Int J Parasitol"[Journal] OR "International Journal for Parasitology"[Journal]',
+        "TRENDS IN PARASITOLOGY": '"Trends Parasitol"[Journal] OR "Trends in Parasitology"[Journal]',
+        "Parasites & Vectors": '"Parasites Vectors"[Journal] OR "Parasites & Vectors"[Journal]',
+        "PLoS Neglected Tropical Diseases": '"PLoS Negl Trop Dis"[Journal] OR "PLoS Neglected Tropical Diseases"[Journal]',
+        "Frontiers in Microbiology": '"Front Microbiol"[Journal] OR "Frontiers in Microbiology"[Journal]',
+        "Journal of Eukaryotic Microbiology": '"J Eukaryot Microbiol"[Journal] OR "Journal of Eukaryotic Microbiology"[Journal]',
+        "Frontiers in Cellular and Infection Microbiology": '"Front Cell Infect Microbiol"[Journal] OR "Frontiers in Cellular and Infection Microbiology"[Journal]'
     }
     
     jq = journal_queries.get(journal, f'"{journal}"[Journal]')
@@ -263,9 +269,19 @@ with st.sidebar:
     st.header("⚙️ 검색 옵션")
     target_journal = st.selectbox(
         "타깃 저널 선택",
-        ["PLOS Pathogens", "International Journal for Parasitology (IJP)"]
+        [
+            "PLOS Pathogens", 
+            "International Journal for Parasitology (IJP)",
+            "TRENDS IN PARASITOLOGY",
+            "Parasites & Vectors",
+            "PLoS Neglected Tropical Diseases",
+            "Frontiers in Microbiology",
+            "Journal of Eukaryotic Microbiology",
+            "Frontiers in Cellular and Infection Microbiology"
+        ]
     )
-    max_papers = st.slider("PubMed 참고 논문 매칭 수", min_value=3, max_value=10, value=5)
+    max_papers = st.slider("PubMed 참고 논문 매칭 수", min_value=3, max_value=20, value=5)
+
 
 # Main Form Side-by-Side Column Design
 col1, col2 = st.columns([1, 1])

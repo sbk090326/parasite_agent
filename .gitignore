@@ -15,3 +15,6 @@ env/
 .idea/
 .vscode/
 .gemini/
+
+# Sample & Testing files
+sample_manuscript.txt

@@ -166,7 +166,7 @@ def analyze_manuscript(abstract_text, target_journal, keywords, matching_papers,
 }}
 ```
 """
-        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         response = model.generate_content(
             prompt, 
             generation_config={"response_mime_type": "application/json"}

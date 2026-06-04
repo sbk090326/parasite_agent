@@ -283,6 +283,17 @@ with col1:
     submit_button = st.button("🚀 투고 적합성 고속 매칭 & AI 피어 리뷰 시작")
     st.markdown("</div>", unsafe_allow_html=True)
 
+with col2:
+    st.markdown("<div class='card'><div class='card-title'>ℹ️ 사용 안내 및 매칭 기능</div>", unsafe_allow_html=True)
+    st.markdown("""
+    본 에이전트는 기생충학 분야 권위지 투고를 위해 두 가지 단계로 작동합니다:
+    1. **PubMed 데이터 매칭**: 입력하신 키워드로 실제 게재된 최신 합격 논문 정보와 본문 링크를 가져옵니다.
+    2. **가상 피어 리뷰**: 업로드된 원고를 수집된 합격 논문의 깊이와 대조 분석하여 수정 방향을 제시합니다.
+    
+    *오른쪽 상단 또는 사이드바에 API 키가 설정되어 있어야 AI 피어 리뷰가 작동합니다.*
+    """)
+    st.markdown("</div>", unsafe_allow_html=True)
+
 # Process logic
 if submit_button:
     if not keywords:
@@ -294,33 +305,42 @@ if submit_button:
         with st.spinner("1️⃣ PubMed API에서 최신 합격 논문 매칭 검색 중..."):
             matching_papers = fetch_pubmed_papers(keywords, target_journal, max_results=max_papers)
             
-        with col2:
-            st.markdown("<div class='card'><div class='card-title'>📚 PubMed 매칭 논문</div>", unsafe_allow_html=True)
-            if not matching_papers:
-                st.info("해당 키워드와 저널 조합으로 매칭된 최신 논문이 없습니다. (키워드를 더 넓게 조정해 보세요)")
-            else:
-                for idx, paper in enumerate(matching_papers, 1):
-                    with st.expander(f"[{paper['year']}] {paper['title']}"):
+        # Draw PubMed Results in Full Width Container
+        st.markdown("---")
+        st.markdown("<div class='card'><div class='card-title'>📚 PubMed 매칭 논문</div>", unsafe_allow_html=True)
+        if not matching_papers:
+            st.info("해당 키워드와 저널 조합으로 매칭된 최신 논문이 없습니다. (키워드를 더 넓게 조정해 보세요)")
+        else:
+            # Render match papers in columns for horizontal space efficiency
+            paper_cols = st.columns(len(matching_papers) if len(matching_papers) > 0 else 1)
+            for idx, paper in enumerate(matching_papers):
+                with paper_cols[idx % len(paper_cols)]:
+                    with st.expander(f"[{paper['year']}] {paper['title'][:50]}...", expanded=True):
+                        st.markdown(f"**제목:** {paper['title']}")
                         st.markdown(f"**저자:** {paper['authors']}")
                         if paper.get('pmid'):
                             paper_url = f"https://pubmed.ncbi.nlm.nih.gov/{paper['pmid']}/"
-                            st.markdown(f"🔗 **본문 링크 (PubMed):** [{paper_url}]({paper_url})")
-                        st.markdown(f"**Abstract:** {paper['abstract']}")
-            st.markdown("</div>", unsafe_allow_html=True)
+                            st.markdown(f"🔗 [본문 링크 (PubMed)]({paper_url})")
+                        st.markdown(f"**Abstract:** {paper['abstract'][:200]}...")
+        st.markdown("</div>", unsafe_allow_html=True)
 
         # 2. AI Review
         with st.spinner("2️⃣ Gemini 2.5 Flash 기반 가상 피어 리뷰 및 리포트 생성 중..."):
             analysis = analyze_manuscript(abstract_text, target_journal, keywords, matching_papers, is_api_key_valid, selected_key)
             
-        with col2:
-            if "error" in analysis:
-                st.error(analysis["error"])
-            else:
-                st.markdown("<div class='card'><div class='card-title'>📊 투고 통과 예측 확률 및 심사 결과</div>", unsafe_allow_html=True)
-                
+        if "error" in analysis:
+            st.error(analysis["error"])
+        else:
+            st.markdown("---")
+            st.markdown("### 📊 AI 피어 리뷰 및 투고 적합성 분석 결과 (전체 화면)")
+            
+            # Row 1: Probability Gauge & Journal Fit (Side-by-side full width)
+            row1_col1, row1_col2 = st.columns([1, 2])
+            
+            with row1_col1:
+                st.markdown("<div class='card' style='height: 100%;'><div class='card-title'>🎯 투고 성공 확률</div>", unsafe_allow_html=True)
                 score = analysis.get("score", 50)
-                
-                # Gauge Chart Using Plotly
+                # Gauge Chart
                 fig = go.Figure(go.Indicator(
                     mode = "gauge+number",
                     value = score,
@@ -336,35 +356,39 @@ if submit_button:
                         ],
                     }
                 ))
-                fig.update_layout(height=220, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor='rgba(0,0,0,0)', font={'color': "white"})
+                fig.update_layout(height=200, margin=dict(l=10, r=10, t=30, b=10), paper_bgcolor='rgba(0,0,0,0)', font={'color': "white"})
                 st.plotly_chart(fig, use_container_width=True)
-                
-                st.markdown(f"**🧐 저널 적합성 분석:**\n{analysis.get('journal_fit', 'N/A')}")
                 st.markdown("</div>", unsafe_allow_html=True)
                 
-                # Side-by-side strengths and risks inside col2 using sub-columns
-                eval_col1, eval_col2 = st.columns([1, 1])
-                
-                with eval_col1:
-                    st.markdown("<div class='card'><div class='card-title'>🌟 논문 주요 강점 (Strengths)</div>", unsafe_allow_html=True)
-                    for strength in analysis.get("strengths", []):
-                        st.markdown(f"✅ {strength}")
-                    st.markdown("</div>", unsafe_allow_html=True)
-                    
-                with eval_col2:
-                    st.markdown("<div class='card'><div class='card-title'>⚠️ 리젝트 리스크 (Reject Risks)</div>", unsafe_allow_html=True)
-                    for risk in analysis.get("reject_risks", []):
-                        st.markdown(f"❌ {risk}")
-                    st.markdown("</div>", unsafe_allow_html=True)
-                
-                # Action Plans full width in col2
-                st.markdown("<div class='card'><div class='card-title'>💡 투고 성공률 극대화를 위한 보완 Action Plan</div>", unsafe_allow_html=True)
-                for i, plan in enumerate(analysis.get("action_plans", []), 1):
-                    st.markdown(f"**{i}. {plan}**")
+            with row1_col2:
+                st.markdown("<div class='card' style='height: 100%;'><div class='card-title'>🧐 저널 적합성 분석 (Journal Fit)</div>", unsafe_allow_html=True)
+                st.write(analysis.get('journal_fit', 'N/A'))
                 st.markdown("</div>", unsafe_allow_html=True)
-else:
-    # Default visual placeholder on col2 before running analysis
-    with col2:
-        st.markdown("<div class='card'><div class='card-title'>📊 분석 결과 및 피어 리뷰 리포트</div>", unsafe_allow_html=True)
-        st.info("왼쪽에서 원고 정보를 입력하고 시작 버튼을 누르면 실시간 분석 리포트가 이곳에 렌더링됩니다.")
-        st.markdown("</div>", unsafe_allow_html=True)
+            
+            # Space separator
+            st.write("")
+            
+            # Row 2: Strengths & Risks (Side-by-side full width)
+            row2_col1, row2_col2 = st.columns([1, 1])
+            
+            with row2_col1:
+                st.markdown("<div class='card' style='height: 100%;'><div class='card-title'>🌟 논문 주요 강점 (Strengths)</div>", unsafe_allow_html=True)
+                for strength in analysis.get("strengths", []):
+                    st.markdown(f"✅ {strength}")
+                st.markdown("</div>", unsafe_allow_html=True)
+                
+            with row2_col2:
+                st.markdown("<div class='card' style='height: 100%;'><div class='card-title'>⚠️ 리젝트 리스크 (Reject Risks)</div>", unsafe_allow_html=True)
+                for risk in analysis.get("reject_risks", []):
+                    st.markdown(f"❌ {risk}")
+                st.markdown("</div>", unsafe_allow_html=True)
+            
+            # Space separator
+            st.write("")
+            
+            # Row 3: Action Plans (Full width card)
+            st.markdown("<div class='card'><div class='card-title'>💡 투고 성공률 극대화를 위한 보완 Action Plan</div>", unsafe_allow_html=True)
+            for i, plan in enumerate(analysis.get("action_plans", []), 1):
+                st.markdown(f"**{i}. {plan}**")
+            st.markdown("</div>", unsafe_allow_html=True)
+

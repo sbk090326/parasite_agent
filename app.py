@@ -257,7 +257,7 @@ with st.sidebar:
     )
     max_papers = st.slider("PubMed 참고 논문 매칭 수", min_value=3, max_value=10, value=5)
 
-# Main Form
+# Main Form Side-by-Side Column Design
 col1, col2 = st.columns([1, 1])
 
 with col1:
@@ -288,6 +288,7 @@ if submit_button:
     elif not abstract_text:
         st.warning("리뷰할 초록(Abstract) 내용을 입력해 주세요.")
     else:
+        # 1. PubMed papers fetch
         with st.spinner("1️⃣ PubMed API에서 최신 합격 논문 매칭 검색 중..."):
             matching_papers = fetch_pubmed_papers(keywords, target_journal, max_results=max_papers)
             
@@ -302,6 +303,7 @@ if submit_button:
                         st.markdown(f"**Abstract:** {paper['abstract']}")
             st.markdown("</div>", unsafe_allow_html=True)
 
+        # 2. AI Review
         with st.spinner("2️⃣ Gemini 2.5 Flash 기반 가상 피어 리뷰 및 리포트 생성 중..."):
             analysis = analyze_manuscript(abstract_text, target_journal, keywords, matching_papers, is_api_key_valid, selected_key)
             
@@ -355,4 +357,9 @@ if submit_button:
                 for i, plan in enumerate(analysis.get("action_plans", []), 1):
                     st.markdown(f"**{i}. {plan}**")
                 st.markdown("</div>", unsafe_allow_html=True)
-
+else:
+    # Default visual placeholder on col2 before running analysis
+    with col2:
+        st.markdown("<div class='card'><div class='card-title'>📊 분석 결과 및 피어 리뷰 리포트</div>", unsafe_allow_html=True)
+        st.info("왼쪽에서 원고 정보를 입력하고 시작 버튼을 누르면 실시간 분석 리포트가 이곳에 렌더링됩니다.")
+        st.markdown("</div>", unsafe_allow_html=True)

@@ -302,7 +302,7 @@ if submit_button:
                         st.markdown(f"**Abstract:** {paper['abstract']}")
             st.markdown("</div>", unsafe_allow_html=True)
 
-        with st.spinner("2️⃣ Gemini 1.5 Pro/Flash 기반 가상 피어 리뷰 및 리포트 생성 중..."):
+        with st.spinner("2️⃣ Gemini 2.5 Flash 기반 가상 피어 리뷰 및 리포트 생성 중..."):
             analysis = analyze_manuscript(abstract_text, target_journal, keywords, matching_papers, is_api_key_valid, selected_key)
             
         with col2:
@@ -329,25 +329,30 @@ if submit_button:
                         ],
                     }
                 ))
-                fig.update_layout(height=250, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor='rgba(0,0,0,0)', font={'color': "white"})
+                fig.update_layout(height=220, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor='rgba(0,0,0,0)', font={'color': "white"})
                 st.plotly_chart(fig, use_container_width=True)
                 
                 st.markdown(f"**🧐 저널 적합성 분석:**\n{analysis.get('journal_fit', 'N/A')}")
                 st.markdown("</div>", unsafe_allow_html=True)
                 
-                # Strengths & Risks
-                st.markdown("<div class='card'><div class='card-title'>🌟 논문 주요 강점 (Strengths)</div>", unsafe_allow_html=True)
-                for strength in analysis.get("strengths", []):
-                    st.markdown(f"✅ {strength}")
-                st.markdown("</div>", unsafe_allow_html=True)
+                # Side-by-side strengths and risks inside col2 using sub-columns
+                eval_col1, eval_col2 = st.columns([1, 1])
                 
-                st.markdown("<div class='card'><div class='card-title'>⚠️ 리젝트 리스크 리스크 (Reject Risks)</div>", unsafe_allow_html=True)
-                for risk in analysis.get("reject_risks", []):
-                    st.markdown(f"❌ {risk}")
-                st.markdown("</div>", unsafe_allow_html=True)
+                with eval_col1:
+                    st.markdown("<div class='card'><div class='card-title'>🌟 논문 주요 강점 (Strengths)</div>", unsafe_allow_html=True)
+                    for strength in analysis.get("strengths", []):
+                        st.markdown(f"✅ {strength}")
+                    st.markdown("</div>", unsafe_allow_html=True)
+                    
+                with eval_col2:
+                    st.markdown("<div class='card'><div class='card-title'>⚠️ 리젝트 리스크 (Reject Risks)</div>", unsafe_allow_html=True)
+                    for risk in analysis.get("reject_risks", []):
+                        st.markdown(f"❌ {risk}")
+                    st.markdown("</div>", unsafe_allow_html=True)
                 
-                # Action Plans
+                # Action Plans full width in col2
                 st.markdown("<div class='card'><div class='card-title'>💡 투고 성공률 극대화를 위한 보완 Action Plan</div>", unsafe_allow_html=True)
                 for i, plan in enumerate(analysis.get("action_plans", []), 1):
                     st.markdown(f"**{i}. {plan}**")
                 st.markdown("</div>", unsafe_allow_html=True)
+

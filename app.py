@@ -76,6 +76,7 @@ def fetch_pubmed_papers(keywords, journal, max_results=5):
         papers = []
         for article in records.get("PubmedArticle", []):
             medline = article.get("MedlineCitation", {})
+            pmid = str(medline.get("PMID", ""))
             article_data = medline.get("Article", {})
             
             title = article_data.get("ArticleTitle", "No Title Available")
@@ -99,7 +100,8 @@ def fetch_pubmed_papers(keywords, journal, max_results=5):
                 "title": title,
                 "authors": authors_str,
                 "year": year,
-                "abstract": abstract
+                "abstract": abstract,
+                "pmid": pmid
             })
             
         return papers
@@ -300,6 +302,9 @@ if submit_button:
                 for idx, paper in enumerate(matching_papers, 1):
                     with st.expander(f"[{paper['year']}] {paper['title']}"):
                         st.markdown(f"**저자:** {paper['authors']}")
+                        if paper.get('pmid'):
+                            paper_url = f"https://pubmed.ncbi.nlm.nih.gov/{paper['pmid']}/"
+                            st.markdown(f"🔗 **본문 링크 (PubMed):** [{paper_url}]({paper_url})")
                         st.markdown(f"**Abstract:** {paper['abstract']}")
             st.markdown("</div>", unsafe_allow_html=True)
 

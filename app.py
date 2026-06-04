@@ -210,16 +210,24 @@ st.markdown("""
     }
     .card {
         background-color: #161b22;
-        padding: 1.5rem;
-        border-radius: 10px;
+        padding: 2rem;
+        border-radius: 12px;
         border: 1px solid #30363d;
-        margin-bottom: 1rem;
+        margin-bottom: 1.5rem;
+        font-size: 1.05rem;
+        line-height: 1.6;
     }
     .card-title {
         color: #58a6ff;
-        font-size: 1.2rem;
+        font-size: 1.35rem;
         font-weight: bold;
-        margin-bottom: 0.8rem;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid #30363d;
+        padding-bottom: 0.5rem;
+    }
+    p, li, span, div {
+        font-size: 1.05rem !important;
+        line-height: 1.6 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -345,9 +353,9 @@ if submit_button:
                     mode = "gauge+number",
                     value = score,
                     domain = {'x': [0, 1], 'y': [0, 1]},
-                    title = {'text': f"{target_journal} 예측 합격률"},
+                    title = {'text': f"{target_journal} 예측 합격률", 'font': {'size': 16}},
                     gauge = {
-                        'axis': {'range': [None, 100]},
+                        'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "white"},
                         'bar': {'color': "#2b5c8f"},
                         'steps': [
                             {'range': [0, 50], 'color': "#4a1212"},
@@ -356,7 +364,7 @@ if submit_button:
                         ],
                     }
                 ))
-                fig.update_layout(height=200, margin=dict(l=10, r=10, t=30, b=10), paper_bgcolor='rgba(0,0,0,0)', font={'color': "white"})
+                fig.update_layout(height=280, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor='rgba(0,0,0,0)', font={'color': "white"})
                 st.plotly_chart(fig, use_container_width=True)
                 st.markdown("</div>", unsafe_allow_html=True)
                 

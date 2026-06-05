@@ -115,6 +115,50 @@ def fetch_pubmed_papers(keywords, journal, max_results=5):
         st.error(f"PubMed API Error: {str(e)}")
         return []
 
+# 저널별 평가 프로필 정의 (난이도, 중점 심사 기준, 평가 지침)
+JOURNAL_PROFILES = {
+    "PLOS Pathogens": {
+        "difficulty": "매우 높음 (Top-tier 저널, 높은 수준의 병원성 메커니즘 검증 및 In vivo 데이터 필수)",
+        "focus": "병원성 기전의 심층 규명, 생체 내(In vivo) 검증의 유무, 기생충-숙주 상호작용의 구체성",
+        "instructions": "매우 보수적이고 엄격하게 점수를 매기십시오. 단순 현상 기술이나 데이터 양이 적은 연구는 감점을 크게 하며, 70점 이상을 받기가 극히 어렵습니다."
+    },
+    "International Journal for Parasitology (IJP)": {
+        "difficulty": "높음 (기생충학 분야 최고의 전통 저널)",
+        "focus": "분자생물학적/면역학적 분석의 타당성, 기생충 모델의 독창성 및 학술적 깊이",
+        "instructions": "학술적 참신함과 논리적 완성도가 높아야 75점 이상을 부여합니다. 생리학적/면역학적 메커니즘을 상세히 다루었는지 엄밀히 평가하십시오."
+    },
+    "TRENDS IN PARASITOLOGY": {
+        "difficulty": "매우 높음 (높은 임팩트의 리뷰 및 트렌드 의견 제시 위주 저널)",
+        "focus": "해당 분야를 선도할 수 있는 참신한 통찰력과 학술적 영향력, 명확한 개념적 진보",
+        "instructions": "연구 데이터의 참신성뿐만 아니라, 해당 원고가 Parasitology 분야 전체에 미치는 개념적이고 패러다임적인 영향력을 기준으로 엄격하게 평가하십시오."
+    },
+    "Parasites & Vectors": {
+        "difficulty": "보통 (실용적이고 기술적인 연구도 많이 수용)",
+        "focus": "매개체-기생충 상호작용 및 역학 연구, 실험 결과의 실무적 적용 가능성 및 데이터 신뢰도",
+        "instructions": "기존에 잘 알려진 주제라도 데이터가 견고하고 역학적 가치가 있다면 점수를 합리적으로 부여(70~85점 가능)하십시오. 불필요하게 점수를 깎기보다 데이터 검증성에 초점을 맞추십시오."
+    },
+    "PLoS Neglected Tropical Diseases": {
+        "difficulty": "높음 (소외된 열대 질환 관련 대표 저널)",
+        "focus": "NTD 질환에 대한 공중보건학적 의의, 병원성 분석, 역학적 유용성 및 실용성",
+        "instructions": "공중보건적 임팩트와 병리 메커니즘을 동시에 균형 있게 평가하십시오. 소외 질환 퇴치에 어떻게 기여하는지 명확해야 높은 점수를 얻습니다."
+    },
+    "Frontiers in Microbiology": {
+        "difficulty": "보통-높음 (넓은 스펙트럼의 미생물/면역 분야 저널)",
+        "focus": "미생물학적 기초 연구, 면역학적 분석, 실험 방법론의 타당성과 명확성",
+        "instructions": "데이터가 체계적이고 결론을 지지하기에 타당하다면 합리적인 점수대(65~80점)를 유연하게 제공하십시오."
+    },
+    "Journal of Eukaryotic Microbiology": {
+        "difficulty": "보통 (진핵 미생물 전문 저널)",
+        "focus": "원생동물의 세포생물학, 분류학, 진화 및 유전학적 분석",
+        "instructions": "생물학적 발견의 고유성에 가치를 두되, 데이터가 타당하고 체계적이라면 70점 내외의 긍정적인 점수를 부여하십시오."
+    },
+    "Frontiers in Cellular and Infection Microbiology": {
+        "difficulty": "보통-높음 (감염 및 세포 미생물학 전문 저널)",
+        "focus": "숙주-기생충 상호작용 시 세포 수준의 기전 분석, 감염 모델의 정확성",
+        "instructions": "감염 세포 수준의 메커니즘이 잘 입증되었다면 비교적 유연한 합격 점수를 수용할 수 있습니다."
+    }
+}
+
 def analyze_manuscript(abstract_text, target_journal, keywords, matching_papers, api_key_valid, api_key):
     """
     Run Gemini LLM Agent to analyze manuscript peer-review and calculate success probability.
@@ -130,13 +174,28 @@ def analyze_manuscript(abstract_text, target_journal, keywords, matching_papers,
         for i, paper in enumerate(matching_papers, 1):
             background_context += f"Paper {i}:\nTitle: {paper['title']}\nAbstract: {paper['abstract']}\n\n"
             
+        # 저널 프로필 획득
+        journal_info = JOURNAL_PROFILES.get(target_journal, {
+            "difficulty": "보통",
+            "focus": "학술적 타당성 및 연구의 신뢰도",
+            "instructions": "일반적인 저널 심사 기준을 따르며, 연구 내용의 데이터 신뢰성을 검증하십시오."
+        })
+        
         prompt = f"""
-당신은 세계적인 기생충학(Parasitology) 분야의 권위 있는 저널인 **PLOS Pathogens** 및 **International Journal for Parasitology (IJP)**의 시니어 에디터이자 피어 리뷰어입니다.
+당신은 세계적인 기생충학(Parasitology) 및 미생물학 분야의 권위 있는 저널인 **{target_journal}**의 시니어 에디터이자 피어 리뷰어입니다.
 
 연구자가 제출한 아래 [대상 논문 원고/초록]을 읽고, [최신 유사 합격 논문 정보]를 참조하여 종합적인 가상 피어 리뷰 리포트를 작성해 주세요.
+특히, 본 저널({target_journal}) 고유의 투고 난이도 및 평가 기준을 절대적으로 적용하여 엄밀하게 스코어링해야 합니다.
 
-[대상 저널]
-{target_journal}
+[대상 저널 정보]
+- 저널 이름: {target_journal}
+- 게재 난이도: {journal_info['difficulty']}
+- 핵심 평가 요소: {journal_info['focus']}
+
+[스코어 산출 및 심사 기준 안내]
+- {journal_info['instructions']}
+- 저널의 난이도가 높을수록 더 엄격하고 깐깐하게 점수를 매겨야 합니다. 난이도가 매우 높은 저널의 경우, 본문 내용이나 대조군이 부실하면 50점 이하의 데스크 리젝트(Desk Reject) 위기 점수를 부여해야 합니다.
+- 반면, 비교적 유연한 저널의 경우 데이터가 신뢰할 수 있다면 합리적인 패스 점수를 부여할 수 있습니다.
 
 [연구 키워드]
 {keywords}
@@ -151,7 +210,7 @@ def analyze_manuscript(abstract_text, target_journal, keywords, matching_papers,
 
 **[요구사항 및 리포트 작성 가이드라인]**
 1. **평가 어조**: 전문적이며 건설적이고 예리하게 지적해 주어야 합니다.
-2. **합격 확률**: 0에서 100 사이의 숫자로 합격 가능성을 정량 예측해 주세요.
+2. **합격 확률**: 0에서 100 사이의 숫자로 합격 가능성을 정량 예측해 주세요. 선택하신 저널의 투고 난이도와 연구 원고의 품질을 반영해야 하므로, 저널에 따라 점수가 뚜렷하게 차이 나야 합니다.
 3. **작성 언어**: 한국어로 출력해야 합니다. 단, 논문의 주요 생물학 용어(예: 유전자명, 경로명, 실험기법 등)는 영어 원문을 함께 기입해 주세요.
 4. **리포트 구성 형식**: 아래 지정된 JSON 포맷으로 반드시 응답해야 하며, 그 외의 다른 텍스트는 절대 포함하지 마십시오.
 

@@ -1,7 +1,5 @@
 import os
 import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
 from dotenv import load_dotenv
 from Bio import Entrez
 import google.generativeai as genai
@@ -120,42 +118,50 @@ JOURNAL_PROFILES = {
     "PLOS Pathogens": {
         "difficulty": "매우 높음 (Top-tier 저널, 높은 수준의 병원성 메커니즘 검증 및 In vivo 데이터 필수)",
         "focus": "병원성 기전의 심층 규명, 생체 내(In vivo) 검증의 유무, 기생충-숙주 상호작용의 구체성",
-        "instructions": "매우 보수적이고 엄격하게 점수를 매기십시오. 단순 현상 기술이나 데이터 양이 적은 연구는 감점을 크게 하며, 70점 이상을 받기가 극히 어렵습니다."
+        "instructions": "매우 보수적이고 엄격하게 점수를 매기십시오. 단순 현상 기술이나 데이터 양이 적은 연구는 감점을 크게 하며, 70점 이상을 받기가 극히 어렵습니다.",
+        "tier": "top"
     },
     "International Journal for Parasitology (IJP)": {
         "difficulty": "높음 (기생충학 분야 최고의 전통 저널)",
         "focus": "분자생물학적/면역학적 분석의 타당성, 기생충 모델의 독창성 및 학술적 깊이",
-        "instructions": "학술적 참신함과 논리적 완성도가 높아야 75점 이상을 부여합니다. 생리학적/면역학적 메커니즘을 상세히 다루었는지 엄밀히 평가하십시오."
+        "instructions": "학술적 참신함과 논리적 완성도가 높아야 75점 이상을 부여합니다. 생리학적/면역학적 메커니즘을 상세히 다루었는지 엄밀히 평가하십시오.",
+        "tier": "high"
     },
     "TRENDS IN PARASITOLOGY": {
         "difficulty": "매우 높음 (높은 임팩트의 리뷰 및 트렌드 의견 제시 위주 저널)",
         "focus": "해당 분야를 선도할 수 있는 참신한 통찰력과 학술적 영향력, 명확한 개념적 진보",
-        "instructions": "연구 데이터의 참신성뿐만 아니라, 해당 원고가 Parasitology 분야 전체에 미치는 개념적이고 패러다임적인 영향력을 기준으로 엄격하게 평가하십시오."
+        "instructions": "연구 데이터의 참신성뿐만 아니라, 해당 원고가 Parasitology 분야 전체에 미치는 개념적이고 패러다임적인 영향력을 기준으로 엄격하게 평가하십시오.",
+        "tier": "top"
     },
     "Parasites & Vectors": {
         "difficulty": "보통 (실용적이고 기술적인 연구도 많이 수용)",
         "focus": "매개체-기생충 상호작용 및 역학 연구, 실험 결과의 실무적 적용 가능성 및 데이터 신뢰도",
-        "instructions": "기존에 잘 알려진 주제라도 데이터가 견고하고 역학적 가치가 있다면 점수를 합리적으로 부여(70~85점 가능)하십시오. 불필요하게 점수를 깎기보다 데이터 검증성에 초점을 맞추십시오."
+        "instructions": "기존에 잘 알려진 주제라도 데이터가 견고하고 역학적 가치가 있다면 점수를 합리적으로 부여(70~85점 가능)하십시오. 불필요하게 점수를 깎기보다 데이터 검증성에 초점을 맞추십시오.",
+        "tier": "mid"
     },
     "PLoS Neglected Tropical Diseases": {
         "difficulty": "높음 (소외된 열대 질환 관련 대표 저널)",
         "focus": "NTD 질환에 대한 공중보건학적 의의, 병원성 분석, 역학적 유용성 및 실용성",
-        "instructions": "공중보건적 임팩트와 병리 메커니즘을 동시에 균형 있게 평가하십시오. 소외 질환 퇴치에 어떻게 기여하는지 명확해야 높은 점수를 얻습니다."
+        "instructions": "공중보건적 임팩트와 병리 메커니즘을 동시에 균형 있게 평가하십시오. 소외 질환 퇴치에 어떻게 기여하는지 명확해야 높은 점수를 얻습니다.",
+        "tier": "high"
     },
     "Frontiers in Microbiology": {
         "difficulty": "보통-높음 (넓은 스펙트럼의 미생물/면역 분야 저널)",
         "focus": "미생물학적 기초 연구, 면역학적 분석, 실험 방법론의 타당성과 명확성",
-        "instructions": "데이터가 체계적이고 결론을 지지하기에 타당하다면 합리적인 점수대(65~80점)를 유연하게 제공하십시오."
+        "instructions": "데이터가 체계적이고 결론을 지지하기에 타당하다면 합리적인 점수대(65~80점)를 유연하게 제공하십시오.",
+        "tier": "mid-high"
     },
     "Journal of Eukaryotic Microbiology": {
         "difficulty": "보통 (진핵 미생물 전문 저널)",
         "focus": "원생동물의 세포생물학, 분류학, 진화 및 유전학적 분석",
-        "instructions": "생물학적 발견의 고유성에 가치를 두되, 데이터가 타당하고 체계적이라면 70점 내외의 긍정적인 점수를 부여하십시오."
+        "instructions": "생물학적 발견의 고유성에 가치를 두되, 데이터가 타당하고 체계적이라면 70점 내외의 긍정적인 점수를 부여하십시오.",
+        "tier": "mid"
     },
     "Frontiers in Cellular and Infection Microbiology": {
         "difficulty": "보통-높음 (감염 및 세포 미생물학 전문 저널)",
         "focus": "숙주-기생충 상호작용 시 세포 수준의 기전 분석, 감염 모델의 정확성",
-        "instructions": "감염 세포 수준의 메커니즘이 잘 입증되었다면 비교적 유연한 합격 점수를 수용할 수 있습니다."
+        "instructions": "감염 세포 수준의 메커니즘이 잘 입증되었다면 비교적 유연한 합격 점수를 수용할 수 있습니다.",
+        "tier": "mid-high"
     }
 }
 
@@ -247,231 +253,733 @@ def analyze_manuscript(abstract_text, target_journal, keywords, matching_papers,
             "error": f"AI 분석 중 오류가 발생했습니다: {str(e)}"
         }
 
-# ----------------- Streamlit UI Page Setup -----------------
+# ═══════════════════════════════════════════════════
+#  Streamlit UI — "Specimen Slide" Design (v3)
+# ═══════════════════════════════════════════════════
 
 st.set_page_config(
-    page_title="Parasitology Journal Acceptance Guide Agent",
-    page_icon="🔬",
+    page_title="Parasitology Journal Acceptance Guide",
+    page_icon="🧫",
     layout="wide"
 )
 
-# Custom CSS for dark-mode premium scientific style
 st.markdown("""
 <style>
-    .main {
-        background-color: #0e1117;
-        color: #fafafa;
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Source+Sans+3:wght@300;400;500;600&family=Fira+Code:wght@400;500;600;700&display=swap');
+
+    :root {
+        --slate: #13151C;
+        --frost: #1C1F2E;
+        --frost-b: #242738;
+        --eosin: #E8627C;
+        --haema: #6366F1;
+        --viridian: #34D399;
+        --buff: #C8BFA9;
+        --bone: #EDEDED;
+        --dim: #6B7194;
+        --rule: rgba(200, 191, 169, 0.1);
+        --ff-display: 'DM Sans', sans-serif;
+        --ff-body: 'Source Sans 3', sans-serif;
+        --ff-data: 'Fira Code', monospace;
     }
-    .stButton>button {
-        background-color: #2b5c8f;
-        color: white;
-        border-radius: 8px;
-        padding: 0.5rem 1.5rem;
-        border: none;
-        transition: background-color 0.3s;
+
+    /* ── Page background ── */
+    .stApp, [data-testid="stAppViewContainer"], .main {
+        background-color: var(--slate) !important;
     }
-    .stButton>button:hover {
-        background-color: #3b7cb8;
+    [data-testid="stHeader"] {
+        background-color: var(--slate) !important;
     }
-    .card {
-        background-color: #161b22;
-        padding: 2rem;
-        border-radius: 12px;
-        border: 1px solid #30363d;
+
+    /* ── Sidebar ── */
+    section[data-testid="stSidebar"] {
+        background-color: #161822 !important;
+        border-right: 1px solid var(--rule) !important;
+    }
+    section[data-testid="stSidebar"] h1,
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3 {
+        font-family: var(--ff-display) !important;
+        color: var(--bone) !important;
+        font-weight: 600 !important;
+    }
+    section[data-testid="stSidebar"] p,
+    section[data-testid="stSidebar"] span,
+    section[data-testid="stSidebar"] div,
+    section[data-testid="stSidebar"] label {
+        font-family: var(--ff-body) !important;
+        color: var(--bone) !important;
+    }
+
+    p, li {
+        font-family: var(--ff-body) !important;
+        color: var(--bone) !important;
+    }
+
+    /* ── Labels — readable ── */
+    .stTextInput label, .stTextArea label, .stSelectbox label, .stSlider label {
+        font-family: var(--ff-display) !important;
+        font-size: 0.88rem !important;
+        font-weight: 500 !important;
+        color: var(--buff) !important;
+    }
+    [data-testid="stFileUploader"] label {
+        font-family: var(--ff-display) !important;
+        font-size: 0.88rem !important;
+        font-weight: 500 !important;
+        color: var(--buff) !important;
+    }
+
+    /* ── Inputs ── */
+    .stTextInput > div > div > input,
+    .stTextArea > div > div > textarea {
+        background-color: var(--frost) !important;
+        color: var(--bone) !important;
+        border: 1px solid var(--rule) !important;
+        border-radius: 6px !important;
+        font-family: var(--ff-body) !important;
+        font-size: 0.92rem !important;
+    }
+    .stTextInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus {
+        border-color: var(--haema) !important;
+        box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.3) !important;
+    }
+    .stSelectbox > div > div {
+        background-color: var(--frost) !important;
+        border: 1px solid var(--rule) !important;
+        border-radius: 6px !important;
+    }
+
+    /* ── File uploader container ── */
+    [data-testid="stFileUploader"] > section {
+        background-color: var(--frost) !important;
+        border: 1px dashed rgba(200, 191, 169, 0.15) !important;
+        border-radius: 8px !important;
+    }
+    /* Enforce hiding native browser input file text */
+    [data-testid="stFileUploader"] section input[type="file"] {
+        display: none !important;
+        opacity: 0 !important;
+        width: 0 !important;
+        height: 0 !important;
+    }
+    /* Enforce heading font settings */
+    h1, h2, h3, h4 {
+        font-family: var(--ff-display) !important;
+        color: var(--bone) !important;
+    }
+
+    /* ── Submit Button Only (Isolated to prevent styling other buttons) ── */
+    .submit-wrap button {
+        width: 100% !important;
+        background: linear-gradient(135deg, var(--eosin), #D94F6E) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 0.75rem 2rem !important;
+        font-family: var(--ff-display) !important;
+        font-weight: 600 !important;
+        font-size: 0.95rem !important;
+        letter-spacing: 0.01em !important;
+        transition: opacity 0.2s ease, transform 0.15s ease !important;
+    }
+    .submit-wrap button:hover {
+        opacity: 0.9 !important;
+        transform: translateY(-1px) !important;
+    }
+
+    /* ── Slider ── */
+    .stSlider [data-testid="stThumbValue"] {
+        font-family: var(--ff-data) !important;
+        color: var(--eosin) !important;
+    }
+
+    /* ── Alerts ── */
+    .stAlert { border-radius: 6px !important; }
+
+    /* ── Containers ── */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        border-color: var(--rule) !important;
+        border-radius: 10px !important;
+        background-color: var(--frost) !important;
+    }
+
+    /* ── Header ── */
+    .pg-header {
+        display: flex;
+        align-items: stretch;
+        gap: 1.5rem;
+        padding: 1.8rem 0 1.5rem 0;
         margin-bottom: 1.5rem;
-        font-size: 1.05rem;
-        line-height: 1.6;
+        border-bottom: 1px solid var(--rule);
     }
-    .card-title {
-        color: #58a6ff;
-        font-size: 1.35rem;
-        font-weight: bold;
+    .pg-header .accent-bar {
+        width: 4px;
+        flex-shrink: 0;
+        border-radius: 2px;
+        background: linear-gradient(180deg, var(--eosin), var(--haema));
+    }
+    .pg-header h1 {
+        font-family: var(--ff-display) !important;
+        font-size: 1.6rem !important;
+        font-weight: 700 !important;
+        color: var(--bone) !important;
+        margin: 0 0 0.35rem 0 !important;
+        letter-spacing: -0.01em !important;
+        line-height: 1.3 !important;
+    }
+    .pg-header .desc {
+        font-family: var(--ff-body) !important;
+        font-size: 0.9rem !important;
+        color: var(--dim) !important;
+        line-height: 1.5 !important;
+        margin-bottom: 0.6rem;
+    }
+    .pg-header .meta {
+        display: flex;
+        gap: 0.5rem;
+    }
+    .pg-header .chip {
+        font-family: var(--ff-data) !important;
+        font-size: 0.62rem !important;
+        color: var(--buff) !important;
+        background: rgba(200, 191, 169, 0.06);
+        border: 1px solid rgba(200, 191, 169, 0.1);
+        padding: 0.15rem 0.55rem;
+        border-radius: 3px;
+        letter-spacing: 0.04em;
+    }
+
+    /* ── Input section heading ── */
+    .input-heading {
+        font-family: var(--ff-display) !important;
+        font-size: 0.9rem !important;
+        font-weight: 600 !important;
+        color: var(--bone) !important;
+        margin-bottom: 0.6rem;
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+    }
+    .input-heading .dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: var(--eosin);
+    }
+
+    /* ── How it works panel ── */
+    .how-panel {
+        padding: 0.2rem 0;
+    }
+    .how-step {
+        display: flex;
+        gap: 0.8rem;
+        padding: 0.7rem 0;
+    }
+    .how-step + .how-step {
+        border-top: 1px solid var(--rule);
+    }
+    .how-step .num {
+        font-family: var(--ff-data) !important;
+        font-size: 0.65rem !important;
+        color: var(--haema) !important;
+        font-weight: 600;
+        flex-shrink: 0;
+        margin-top: 0.1rem;
+    }
+    .how-step .txt {
+        font-family: var(--ff-body) !important;
+        font-size: 0.85rem !important;
+        color: var(--dim) !important;
+        line-height: 1.5 !important;
+    }
+    .how-step .txt strong {
+        color: var(--bone) !important;
+        font-weight: 500 !important;
+    }
+
+    /* ── Section heading ── */
+    .sec-heading {
+        font-family: var(--ff-display) !important;
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
+        color: var(--bone) !important;
+        padding-bottom: 0.6rem;
+        border-bottom: 1px solid var(--rule);
+        margin: 2rem 0 1.2rem 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .sec-heading .label {
+        font-family: var(--ff-data) !important;
+        font-size: 0.62rem !important;
+        color: var(--dim) !important;
+        background: rgba(99, 102, 241, 0.1);
+        padding: 0.1rem 0.45rem;
+        border-radius: 3px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+
+    /* ── Chromatography strip ── */
+    .chroma-container {
+        background: var(--frost);
+        border: 1px solid var(--rule);
+        border-radius: 10px;
+        padding: 1.8rem 2rem;
+        margin-bottom: 1.5rem;
+    }
+    .chroma-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 1.2rem;
+    }
+    .chroma-header .journal {
+        font-family: var(--ff-display) !important;
+        font-size: 0.85rem !important;
+        font-weight: 500 !important;
+        color: var(--buff) !important;
+    }
+    .chroma-header .score-num {
+        font-family: var(--ff-data) !important;
+        font-size: 2.8rem !important;
+        font-weight: 700 !important;
+        line-height: 1 !important;
+        letter-spacing: -0.03em;
+    }
+    .chroma-header .score-unit {
+        font-family: var(--ff-data) !important;
+        font-size: 0.75rem !important;
+        color: var(--dim) !important;
+        margin-left: 0.25rem;
+    }
+    .chroma-track {
+        position: relative;
+        height: 10px;
+        border-radius: 5px;
+        background: linear-gradient(90deg,
+            #E8627C 0%,
+            #F0A050 35%,
+            #E8D44D 55%,
+            #34D399 100%
+        );
+        margin-bottom: 0.6rem;
+    }
+    .chroma-marker {
+        position: absolute;
+        top: -5px;
+        width: 4px;
+        height: 20px;
+        background: var(--bone);
+        border-radius: 2px;
+        box-shadow: 0 0 8px rgba(237, 237, 237, 0.5);
+    }
+    .chroma-labels {
+        display: flex;
+        justify-content: space-between;
+        font-family: var(--ff-data) !important;
+        font-size: 0.62rem !important;
+        color: var(--dim) !important;
+        letter-spacing: 0.03em;
+    }
+
+    /* ── Result card ── */
+    .res-card {
+        background: var(--frost);
+        border: 1px solid var(--rule);
+        border-radius: 10px;
+        padding: 1.5rem 1.8rem;
         margin-bottom: 1rem;
-        border-bottom: 1px solid #30363d;
-        padding-bottom: 0.5rem;
     }
-    p, li, span, div {
-        font-size: 1.05rem !important;
-        line-height: 1.6 !important;
+    .res-card-title {
+        font-family: var(--ff-display) !important;
+        font-size: 0.85rem !important;
+        font-weight: 600 !important;
+        color: var(--buff) !important;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--rule);
+    }
+
+    /* ── Review items ── */
+    .rv-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.7rem;
+        padding: 0.65rem 0;
+    }
+    .rv-item + .rv-item { border-top: 1px solid var(--rule); }
+    .rv-dot {
+        flex-shrink: 0;
+        width: 5px; height: 5px;
+        border-radius: 50%;
+        margin-top: 0.5rem;
+    }
+    .rv-dot.pos { background: var(--viridian); }
+    .rv-dot.neg { background: var(--eosin); }
+    .rv-text {
+        font-family: var(--ff-body) !important;
+        font-size: 0.9rem !important;
+        color: var(--bone) !important;
+        line-height: 1.55 !important;
+    }
+
+    /* ── Journal fit blockquote ── */
+    .jf-quote {
+        border-left: 2px solid var(--haema);
+        padding: 0.8rem 1.2rem;
+        margin: 0;
+    }
+    .jf-quote p {
+        font-family: var(--ff-body) !important;
+        font-size: 0.92rem !important;
+        color: var(--dim) !important;
+        line-height: 1.65 !important;
+        font-style: italic;
+    }
+
+    /* ── Paper cards ── */
+    .pub-card {
+        background: var(--frost);
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        padding: 1.2rem 1.4rem;
+        margin-bottom: 0.8rem;
+        transition: border-color 0.2s ease;
+    }
+    .pub-card:hover { border-color: rgba(200, 191, 169, 0.25); }
+    .pub-year {
+        font-family: var(--ff-data) !important;
+        font-size: 0.62rem !important;
+        color: var(--eosin) !important;
+        letter-spacing: 0.06em;
+    }
+    .pub-title {
+        font-family: var(--ff-display) !important;
+        font-size: 0.9rem !important;
+        font-weight: 600 !important;
+        color: var(--bone) !important;
+        line-height: 1.35 !important;
+        margin: 0.3rem 0 0.4rem 0;
+    }
+    .pub-authors {
+        font-family: var(--ff-body) !important;
+        font-size: 0.78rem !important;
+        color: var(--dim) !important;
+    }
+    .pub-abstract {
+        font-family: var(--ff-body) !important;
+        font-size: 0.8rem !important;
+        color: rgba(107, 113, 148, 0.85) !important;
+        line-height: 1.45 !important;
+        margin-top: 0.5rem;
+    }
+    .pub-link { margin-top: 0.6rem; }
+    .pub-link a {
+        font-family: var(--ff-data) !important;
+        font-size: 0.7rem !important;
+        color: var(--haema) !important;
+        text-decoration: none !important;
+    }
+    .pub-link a:hover { text-decoration: underline !important; }
+
+    /* ── Action steps ── */
+    .act-step {
+        display: flex;
+        gap: 0.9rem;
+        padding: 0.7rem 0;
+    }
+    .act-step + .act-step { border-top: 1px solid var(--rule); }
+    .act-num {
+        font-family: var(--ff-data) !important;
+        font-size: 0.72rem !important;
+        font-weight: 600 !important;
+        color: var(--haema) !important;
+        flex-shrink: 0;
+        margin-top: 0.15rem;
+    }
+    .act-text {
+        font-family: var(--ff-body) !important;
+        font-size: 0.9rem !important;
+        color: var(--bone) !important;
+        line-height: 1.55 !important;
+    }
+
+    /* ── Tier badge ── */
+    .tier-badge {
+        display: inline-block;
+        font-family: var(--ff-data) !important;
+        font-size: 0.65rem !important;
+        padding: 0.15rem 0.55rem;
+        border-radius: 3px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        margin-top: 0.3rem;
+    }
+    .tier-top { background: rgba(232, 98, 124, 0.12); color: var(--eosin) !important; }
+    .tier-high { background: rgba(240, 160, 80, 0.12); color: #F0A050 !important; }
+    .tier-mid-high { background: rgba(99, 102, 241, 0.1); color: var(--haema) !important; }
+    .tier-mid { background: rgba(52, 211, 153, 0.1); color: var(--viridian) !important; }
+
+    /* ── Reduced motion ── */
+    @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+            transition-duration: 0.01ms !important;
+            animation-duration: 0.01ms !important;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ----------------- App Layout & Sidebar -----------------
 
-st.title("🔬 Parasitology Journal Acceptance Guide Agent")
-st.markdown("### PLOS Pathogens & International Journal for Parasitology (IJP) 투고 지원 솔루션")
-st.write("본 프로그램은 사용자의 초록/전체 논문 데이터를 Google AI Studio 통신으로 보호하여 학습에 반영하지 않고 분석합니다.")
+# ═════════════════════════════════════
+#  Header
+# ═════════════════════════════════════
+
+st.markdown("""
+<div class="pg-header">
+    <div class="accent-bar"></div>
+    <div class="content">
+        <h1>Parasitology Journal<br/>Acceptance Guide</h1>
+        <div class="desc">
+            원고를 업로드하면 PubMed 합격 논문과 대조 분석 후, AI 가상 피어리뷰를 수행합니다.
+        </div>
+        <div class="meta">
+            <span class="chip">Gemini 2.5 Flash</span>
+            <span class="chip">PubMed Entrez API</span>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ═════════════════════════════════════
+#  Sidebar
+# ═════════════════════════════════════
 
 with st.sidebar:
-    st.header("🔑 API 설정")
-    
-    # Input user API Key or fallback to .env
-    user_api_key = st.text_input(
-        "Google Gemini API Key 입력",
-        type="password",
-        placeholder="AI Studio에서 발급받은 API 키를 입력하세요...",
-        help="입력하지 않으면 기본 서버 환경설정(.env)의 API 키를 사용합니다."
-    )
-    
-    selected_key = user_api_key.strip() if user_api_key.strip() else env_gemini_key.strip()
-    is_api_key_valid = False
-    
-    if selected_key and not selected_key.startswith("your_gemini_api_key") and selected_key != "":
-        is_api_key_valid = True
-        
-    if is_api_key_valid:
-        st.success("Google Generative AI 연결 준비 완료")
-    else:
-        st.error("Gemini API 키를 입력해 주세요. (미설정 상태)")
-        
-    st.header("⚙️ 검색 옵션")
+    st.markdown("### 🔬 검색 설정")
+
     target_journal = st.selectbox(
-        "타깃 저널 선택",
-        [
-            "PLOS Pathogens", 
-            "International Journal for Parasitology (IJP)",
-            "TRENDS IN PARASITOLOGY",
-            "Parasites & Vectors",
-            "PLoS Neglected Tropical Diseases",
-            "Frontiers in Microbiology",
-            "Journal of Eukaryotic Microbiology",
-            "Frontiers in Cellular and Infection Microbiology"
-        ]
+        "타깃 저널",
+        list(JOURNAL_PROFILES.keys())
     )
-    max_papers = st.slider("PubMed 참고 논문 매칭 수", min_value=3, max_value=20, value=5)
+
+    # Tier badge below journal select
+    tier = JOURNAL_PROFILES.get(target_journal, {}).get("tier", "mid")
+    tier_labels = {"top": "Very High", "high": "High", "mid-high": "Mid-High", "mid": "Moderate"}
+    st.markdown(
+        f'<span class="tier-badge tier-{tier}">난이도: {tier_labels.get(tier, tier)}</span>',
+        unsafe_allow_html=True
+    )
+
+    max_papers = st.slider("참고 논문 수", min_value=3, max_value=20, value=5)
+
+    st.markdown("---")
+    st.markdown("### 🛡️ 데이터 보호")
+    st.caption("원고 데이터는 Google AI Studio를 통해 일회성 처리되며, 학습에 반영되지 않습니다.")
+
+# Use env key directly for backend
+selected_key = env_gemini_key.strip()
+is_api_key_valid = False
+if selected_key and not selected_key.startswith("your_gemini_api_key") and selected_key != "":
+    is_api_key_valid = True
 
 
-# Main Form Side-by-Side Column Design
-col1, col2 = st.columns([1, 1])
+# ═════════════════════════════════════
+#  Input Area — 2-column layout
+# ═════════════════════════════════════
 
-with col1:
-    st.markdown("<div class='card'><div class='card-title'>✍️ 연구 정보 입력</div>", unsafe_allow_html=True)
-    keywords = st.text_input("연구 핵심 키워드 (예: Toxoplasma gondii, autophagy, macrophage)", "")
-    
-    # File Uploader for multiple formats (.txt, .pdf, .docx)
-    uploaded_file = st.file_uploader("초록 또는 전체 논문 파일 업로드 (.txt, .pdf, .docx)", type=["txt", "pdf", "docx"])
-    
+in_col1, in_col2 = st.columns([3, 2], gap="large")
+
+with in_col1:
+    st.markdown(
+        '<div class="input-heading"><div class="dot"></div>연구 정보 입력</div>',
+        unsafe_allow_html=True
+    )
+
+    keywords = st.text_input(
+        "연구 키워드",
+        "",
+        placeholder="예: Toxoplasma gondii, autophagy, macrophage"
+    )
+
+    uploaded_file = st.file_uploader(
+        "원고 파일 업로드",
+        type=["txt", "pdf", "docx"],
+        label_visibility="collapsed"
+    )
+
     default_text = ""
     if uploaded_file is not None:
         default_text = extract_text_from_file(uploaded_file)
-        
+
     abstract_text = st.text_area(
-        "원고 내용 직접 입력 또는 수정",
+        "원고 텍스트",
         value=default_text,
-        height=300,
-        placeholder="이곳에 논문의 Abstract 또는 전체 원고 텍스트를 입력하십시오..."
+        height=200,
+        placeholder="논문의 Abstract 또는 전체 원고를 입력하세요..."
     )
-    
-    submit_button = st.button("🚀 투고 적합성 고속 매칭 & AI 피어 리뷰 시작")
-    st.markdown("</div>", unsafe_allow_html=True)
 
-with col2:
-    st.markdown("<div class='card'><div class='card-title'>ℹ️ 사용 안내 및 매칭 기능</div>", unsafe_allow_html=True)
+    st.markdown('<div class="submit-wrap">', unsafe_allow_html=True)
+    submit_button = st.button("🧬 분석 시작 — PubMed 매칭 & AI 피어리뷰")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with in_col2:
+    st.markdown(
+        '<div class="input-heading"><div class="dot"></div>사용 방법</div>',
+        unsafe_allow_html=True
+    )
     st.markdown("""
-    본 에이전트는 기생충학 분야 권위지 투고를 위해 두 가지 단계로 작동합니다:
-    1. **PubMed 데이터 매칭**: 입력하신 키워드로 실제 게재된 최신 합격 논문 정보와 본문 링크를 가져옵니다.
-    2. **가상 피어 리뷰**: 업로드된 원고를 수집된 합격 논문의 깊이와 대조 분석하여 수정 방향을 제시합니다.
-    
-    *오른쪽 상단 또는 사이드바에 API 키가 설정되어 있어야 AI 피어 리뷰가 작동합니다.*
-    """)
-    st.markdown("</div>", unsafe_allow_html=True)
+    <div class="how-panel">
+        <div class="how-step">
+            <div class="num">01</div>
+            <div class="txt"><strong>PubMed 매칭</strong><br/>키워드로 타깃 저널의 최신 합격 논문을 검색합니다.</div>
+        </div>
+        <div class="how-step">
+            <div class="num">02</div>
+            <div class="txt"><strong>AI 피어리뷰</strong><br/>합격 논문과 대조 분석하여 가상 리뷰 리포트를 생성합니다.</div>
+        </div>
+        <div class="how-step">
+            <div class="num">03</div>
+            <div class="txt"><strong>보완 전략</strong><br/>투고 성공률을 높이기 위한 구체적 액션 플랜을 제안합니다.</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# Process logic
+    # Show selected journal info
+    profile = JOURNAL_PROFILES.get(target_journal, {})
+    st.markdown("---")
+    st.markdown(f"**선택된 저널:** {target_journal}")
+    st.caption(profile.get("focus", ""))
+
+
+# ═════════════════════════════════════
+#  Results
+# ═════════════════════════════════════
+
 if submit_button:
     if not keywords:
-        st.warning("PubMed 유사 논문 검색을 위해 키워드를 입력해 주세요.")
+        st.warning("키워드를 입력해 주세요.")
     elif not abstract_text:
-        st.warning("리뷰할 초록(Abstract) 내용을 입력해 주세요.")
+        st.warning("원고 내용을 입력해 주세요.")
     else:
-        # 1. PubMed papers fetch
-        with st.spinner("1️⃣ PubMed API에서 최신 합격 논문 매칭 검색 중..."):
+        # ── PubMed search ──
+        with st.spinner("PubMed에서 논문을 검색하고 있습니다..."):
             matching_papers = fetch_pubmed_papers(keywords, target_journal, max_results=max_papers)
-            
-        # Draw PubMed Results in Full Width Container
-        st.markdown("---")
-        st.markdown("<div class='card'><div class='card-title'>📚 PubMed 매칭 논문</div>", unsafe_allow_html=True)
-        if not matching_papers:
-            st.info("해당 키워드와 저널 조합으로 매칭된 최신 논문이 없습니다. (키워드를 더 넓게 조정해 보세요)")
-        else:
-            # Render match papers in columns for horizontal space efficiency
-            paper_cols = st.columns(len(matching_papers) if len(matching_papers) > 0 else 1)
-            for idx, paper in enumerate(matching_papers):
-                with paper_cols[idx % len(paper_cols)]:
-                    with st.expander(f"[{paper['year']}] {paper['title'][:50]}...", expanded=True):
-                        st.markdown(f"**제목:** {paper['title']}")
-                        st.markdown(f"**저자:** {paper['authors']}")
-                        if paper.get('pmid'):
-                            paper_url = f"https://pubmed.ncbi.nlm.nih.gov/{paper['pmid']}/"
-                            st.markdown(f"🔗 [본문 링크 (PubMed)]({paper_url})")
-                        st.markdown(f"**Abstract:** {paper['abstract'][:200]}...")
-        st.markdown("</div>", unsafe_allow_html=True)
 
-        # 2. AI Review
-        with st.spinner("2️⃣ Gemini 2.5 Flash 기반 가상 피어 리뷰 및 리포트 생성 중..."):
-            analysis = analyze_manuscript(abstract_text, target_journal, keywords, matching_papers, is_api_key_valid, selected_key)
-            
+        st.markdown(
+            '<div class="sec-heading">📚 PubMed 매칭 논문 <span class="label">step 1</span></div>',
+            unsafe_allow_html=True
+        )
+
+        if not matching_papers:
+            st.info("매칭된 논문이 없습니다. 키워드를 조정해 보세요.")
+        else:
+            cols = st.columns(2)
+            for idx, paper in enumerate(matching_papers):
+                with cols[idx % 2]:
+                    paper_url = f"https://pubmed.ncbi.nlm.nih.gov/{paper['pmid']}/" if paper.get("pmid") else "#"
+                    abs_text = paper["abstract"][:160] + "..." if len(paper["abstract"]) > 160 else paper["abstract"]
+                    st.markdown(f"""
+                    <div class="pub-card">
+                        <div class="pub-year">{paper['year']}</div>
+                        <div class="pub-title">{paper['title']}</div>
+                        <div class="pub-authors">{paper['authors']}</div>
+                        <div class="pub-abstract">{abs_text}</div>
+                        <div class="pub-link"><a href="{paper_url}" target="_blank">PubMed →</a></div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+        # ── AI Review ──
+        with st.spinner("AI 피어리뷰를 수행하고 있습니다..."):
+            analysis = analyze_manuscript(
+                abstract_text, target_journal, keywords,
+                matching_papers, is_api_key_valid, selected_key
+            )
+
         if "error" in analysis:
             st.error(analysis["error"])
         else:
-            st.markdown("---")
-            st.markdown("### 📊 AI 피어 리뷰 및 투고 적합성 분석 결과 (전체 화면)")
-            
-            # Row 1: Probability Gauge & Journal Fit (Side-by-side full width)
-            row1_col1, row1_col2 = st.columns([1, 2])
-            
-            with row1_col1:
-                st.markdown("<div class='card' style='height: 100%;'><div class='card-title'>🎯 투고 성공 확률</div>", unsafe_allow_html=True)
-                score = analysis.get("score", 50)
-                # Gauge Chart
-                fig = go.Figure(go.Indicator(
-                    mode = "gauge+number",
-                    value = score,
-                    domain = {'x': [0, 1], 'y': [0, 1]},
-                    title = {'text': f"{target_journal} 예측 합격률", 'font': {'size': 16}},
-                    gauge = {
-                        'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "white"},
-                        'bar': {'color': "#2b5c8f"},
-                        'steps': [
-                            {'range': [0, 50], 'color': "#4a1212"},
-                            {'range': [50, 80], 'color': "#3c3d10"},
-                            {'range': [80, 100], 'color': "#13381a"}
-                        ],
-                    }
-                ))
-                fig.update_layout(height=280, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor='rgba(0,0,0,0)', font={'color': "white"})
-                st.plotly_chart(fig, use_container_width=True)
-                st.markdown("</div>", unsafe_allow_html=True)
-                
-            with row1_col2:
-                st.markdown("<div class='card' style='height: 100%;'><div class='card-title'>🧐 저널 적합성 분석 (Journal Fit)</div>", unsafe_allow_html=True)
-                st.write(analysis.get('journal_fit', 'N/A'))
-                st.markdown("</div>", unsafe_allow_html=True)
-            
-            # Space separator
-            st.write("")
-            
-            # Row 2: Strengths & Risks (Side-by-side full width)
-            row2_col1, row2_col2 = st.columns([1, 1])
-            
-            with row2_col1:
-                st.markdown("<div class='card' style='height: 100%;'><div class='card-title'>🌟 논문 주요 강점 (Strengths)</div>", unsafe_allow_html=True)
-                for strength in analysis.get("strengths", []):
-                    st.markdown(f"✅ {strength}")
-                st.markdown("</div>", unsafe_allow_html=True)
-                
-            with row2_col2:
-                st.markdown("<div class='card' style='height: 100%;'><div class='card-title'>⚠️ 리젝트 리스크 (Reject Risks)</div>", unsafe_allow_html=True)
-                for risk in analysis.get("reject_risks", []):
-                    st.markdown(f"❌ {risk}")
-                st.markdown("</div>", unsafe_allow_html=True)
-            
-            # Space separator
-            st.write("")
-            
-            # Row 3: Action Plans (Full width card)
-            st.markdown("<div class='card'><div class='card-title'>💡 투고 성공률 극대화를 위한 보완 Action Plan</div>", unsafe_allow_html=True)
-            for i, plan in enumerate(analysis.get("action_plans", []), 1):
-                st.markdown(f"**{i}. {plan}**")
-            st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown(
+                '<div class="sec-heading">📊 AI 피어리뷰 결과 <span class="label">step 2</span></div>',
+                unsafe_allow_html=True
+            )
 
+            score = analysis.get("score", 50)
+            score_color = (
+                "var(--viridian)" if score >= 75
+                else "var(--buff)" if score >= 50
+                else "var(--eosin)"
+            )
+
+            # ── Signature: Chromatography strip ──
+            st.markdown(f"""
+            <div class="chroma-container">
+                <div class="chroma-header">
+                    <div class="journal">{target_journal}</div>
+                    <div>
+                        <span class="score-num" style="color: {score_color};">{score}</span>
+                        <span class="score-unit">/ 100</span>
+                    </div>
+                </div>
+                <div class="chroma-track">
+                    <div class="chroma-marker" style="left: {score}%;"></div>
+                </div>
+                <div class="chroma-labels">
+                    <span>Desk reject</span>
+                    <span>Major revision</span>
+                    <span>Minor revision</span>
+                    <span>Accept</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # ── Journal fit ──
+            journal_fit = analysis.get("journal_fit", "N/A")
+            st.markdown(f"""
+            <div class="res-card">
+                <div class="res-card-title">저널 적합성 분석</div>
+                <div class="jf-quote"><p>{journal_fit}</p></div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # ── Strengths & Risks ──
+            r_col1, r_col2 = st.columns(2)
+
+            with r_col1:
+                items_html = ""
+                for s in analysis.get("strengths", []):
+                    items_html += f'<div class="rv-item"><div class="rv-dot pos"></div><div class="rv-text">{s}</div></div>'
+                st.markdown(f"""
+                <div class="res-card">
+                    <div class="res-card-title">강점 Strengths</div>
+                    {items_html}
+                </div>
+                """, unsafe_allow_html=True)
+
+            with r_col2:
+                items_html = ""
+                for r in analysis.get("reject_risks", []):
+                    items_html += f'<div class="rv-item"><div class="rv-dot neg"></div><div class="rv-text">{r}</div></div>'
+                st.markdown(f"""
+                <div class="res-card">
+                    <div class="res-card-title">리스크 Reject Risks</div>
+                    {items_html}
+                </div>
+                """, unsafe_allow_html=True)
+
+            # ── Action Plans ──
+            steps_html = ""
+            for i, plan in enumerate(analysis.get("action_plans", []), 1):
+                steps_html += f'<div class="act-step"><div class="act-num">{i:02d}</div><div class="act-text">{plan}</div></div>'
+
+            st.markdown(f"""
+            <div class="res-card">
+                <div class="res-card-title">보완 전략 Action Plan</div>
+                {steps_html}
+            </div>
+            """, unsafe_allow_html=True)

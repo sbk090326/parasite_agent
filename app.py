@@ -355,7 +355,9 @@ st.markdown("""
     [data-testid="stTextInputRootElement"] button {
         color: var(--dim) !important;
     }
-    [data-testid="stTextInputRootElement"] button * {
+    section[data-testid="stSidebar"] [data-testid="stTextInputRootElement"] span,
+    section[data-testid="stSidebar"] [data-testid="stTextInputRootElement"] div,
+    section[data-testid="stSidebar"] [data-testid="stTextInputRootElement"] button {
         font-family: 'Material Symbols Outlined', 'Material Symbols Rounded', 'Material Icons', inherit !important;
     }
     

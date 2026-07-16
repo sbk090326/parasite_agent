@@ -331,7 +331,31 @@ st.markdown("""
     }
 
     /* ── Inputs ── */
-    .stTextInput > div > div > input,
+    [data-testid="stTextInputRootElement"] {
+        background-color: var(--frost) !important;
+        border: 1px solid var(--rule) !important;
+        border-radius: 6px !important;
+        width: 100% !important;
+    }
+    [data-testid="stTextInputRootElement"]:focus-within {
+        border-color: var(--haema) !important;
+        box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.3) !important;
+    }
+    [data-testid="stTextInputRootElement"] * {
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+    [data-testid="stTextInputRootElement"] input {
+        color: var(--bone) !important;
+        font-family: var(--ff-body) !important;
+        font-size: 0.92rem !important;
+        width: 100% !important;
+    }
+    [data-testid="stTextInputRootElement"] button {
+        color: var(--dim) !important;
+    }
+    
     .stTextArea > div > div > textarea {
         background-color: var(--frost) !important;
         color: var(--bone) !important;
@@ -340,7 +364,6 @@ st.markdown("""
         font-family: var(--ff-body) !important;
         font-size: 0.92rem !important;
     }
-    .stTextInput > div > div > input:focus,
     .stTextArea > div > div > textarea:focus {
         border-color: var(--haema) !important;
         box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.3) !important;
@@ -362,6 +385,7 @@ st.markdown("""
         display: none !important;
         opacity: 0 !important;
         width: 0 !important;
+        height: 0 !important;
         height: 0 !important;
     }
     /* Enforce heading font settings */
@@ -397,6 +421,33 @@ st.markdown("""
 
     /* ── Alerts ── */
     .stAlert { border-radius: 6px !important; }
+    section[data-testid="stSidebar"] [data-testid="stAlert"] {
+        margin-top: 6px !important;
+        margin-bottom: 6px !important;
+        background-color: transparent !important;
+        padding: 0 !important;
+        width: 100% !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stAlert"] > div {
+        padding: 6px 12px !important;
+        min-height: unset !important;
+        border-radius: 6px !important;
+        width: 100% !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stAlert"] [data-testid="stNotificationContent"] {
+        font-size: 0.82rem !important;
+        line-height: 1.3 !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stAlert"] svg {
+        width: 14px !important;
+        height: 14px !important;
+    }
+    
+    /* ── Sidebar Text Input Align ── */
+    section[data-testid="stSidebar"] .stTextInput,
+    section[data-testid="stSidebar"] .stTextInput > div {
+        width: 100% !important;
+    }
 
     /* ── Containers ── */
     [data-testid="stVerticalBlockBorderWrapper"] {
@@ -779,14 +830,25 @@ with st.sidebar:
     max_papers = st.slider("참고 논문 수", min_value=3, max_value=20, value=5)
 
     st.markdown("---")
-    st.markdown("### 🛡️ 데이터 보호")
-    st.caption("원고 데이터는 Google AI Studio를 통해 일회성 처리되며, 학습에 반영되지 않습니다.")
+    st.markdown("### 🔑 API 설정")
+    user_api_key = st.text_input(
+        "Google Gemini API Key 입력",
+        type="password",
+        placeholder="AI Studio에서 발급받은 API 키를 입력하세요...",
+        help="입력하지 않으면 기본 서버 환경설정(.env)의 API 키를 사용합니다."
+    )
 
-# Use env key directly for backend
-selected_key = env_gemini_key.strip()
-is_api_key_valid = False
-if selected_key and not selected_key.startswith("your_gemini_api_key") and selected_key != "":
-    is_api_key_valid = True
+    selected_key = user_api_key.strip() if user_api_key.strip() else env_gemini_key.strip()
+    is_api_key_valid = False
+    if selected_key and not selected_key.startswith("your_gemini_api_key") and selected_key != "":
+        is_api_key_valid = True
+        st.success("API 키 설정 완료")
+    else:
+        st.error("Gemini API 키를 입력해 주세요. (미설정 상태)")
+
+    st.markdown("---")
+    st.markdown("### 🛡️ 데이터 보호")
+    st.caption("원고 데이터는 Google AI Studio를 통해 일회성 처리되며, 학습에 반영하지 않고 분석합니다.")
 
 
 # ═════════════════════════════════════

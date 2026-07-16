@@ -2,14 +2,14 @@ import os
 import streamlit as st
 from dotenv import load_dotenv
 from Bio import Entrez
-import google.generativeai as genai
+from openai import OpenAI
 
 # Load environment variables
 load_dotenv()
 
 # Set up Entrez Email
 Entrez.email = os.getenv("ENTREZ_EMAIL", "your_email@example.com")
-env_gemini_key = os.getenv("GEMINI_API_KEY", "")
+env_nvidia_key = os.getenv("NVIDIA_API_KEY", "")
 
 # ----------------- Core Functions -----------------
 
@@ -45,6 +45,139 @@ def extract_text_from_file(uploaded_file):
             st.warning("Word 문서(.docx) 텍스트 추출을 위해 python-docx 라이브러리가 필요합니다.")
             return "Word reader library missing."
     return ""
+
+import re
+import math
+from collections import Counter
+import requests
+
+def get_cosine_similarity(text1, text2):
+    """
+    Calculate the cosine similarity between word frequency vectors of text1 and text2.
+    """
+    if not text1 or not text2:
+        return 0.0
+    words1 = re.findall(r'\w+', text1.lower())
+    words2 = re.findall(r'\w+', text2.lower())
+    vec1 = Counter(words1)
+    vec2 = Counter(words2)
+    intersection = set(vec1.keys()) & set(vec2.keys())
+    numerator = sum([vec1[x] * vec2[x] for x in intersection])
+    sum1 = sum([vec1[x]**2 for x in vec1.keys()])
+    sum2 = sum([vec2[x]**2 for x in vec2.keys()])
+    denominator = math.sqrt(sum1) * math.sqrt(sum2)
+    if not denominator:
+        return 0.0
+    return float(numerator) / denominator
+
+def enrich_papers_with_pubtator_and_pmc(papers):
+    """
+    Enrich paper list by:
+    1. Converting PMIDs to PMCIDs using the PMC ID converter API.
+    2. Fetching biological entities (Gene, Disease, Chemical) from PubTator Central.
+    3. Fetching PMC Full Text (if available) from PubTator PMC BioC JSON API.
+    """
+    if not papers:
+        return papers
+        
+    pmids = [p["pmid"] for p in papers if p.get("pmid")]
+    if not pmids:
+        return papers
+        
+    # Step 1: ID Conversion (PMID -> PMCID)
+    pmid_to_pmcid = {}
+    try:
+        conv_url = f"https://pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/?ids={','.join(pmids)}&format=json&tool=bio_acceptance_guide&email={Entrez.email}"
+        conv_res = requests.get(conv_url, timeout=10)
+        if conv_res.status_code == 200:
+            conv_data = conv_res.json()
+            for record in conv_data.get("records", []):
+                curr_pmid = record.get("pmid")
+                curr_pmcid = record.get("pmcid")
+                if curr_pmid and curr_pmcid:
+                    pmid_to_pmcid[curr_pmid] = curr_pmcid
+    except Exception as e:
+        pass
+
+    # Step 2 & 3: Fetch PubTator data (Abstracts or PMC Full Texts)
+    for paper in papers:
+        pmid = paper["pmid"]
+        pmcid = pmid_to_pmcid.get(pmid)
+        
+        paper["pmcid"] = pmcid
+        paper["full_text_available"] = False
+        paper["full_text"] = ""
+        paper["genes"] = []
+        paper["diseases"] = []
+        paper["chemicals"] = []
+        paper["species"] = []
+        paper["celllines"] = []
+        
+        try:
+            if pmcid:
+                url = f"https://www.ncbi.nlm.nih.gov/research/pubtator-api/publications/export/biocjson?pmcids={pmcid}"
+            else:
+                url = f"https://www.ncbi.nlm.nih.gov/research/pubtator-api/publications/export/biocjson?pmids={pmid}"
+                
+            res = requests.get(url, timeout=10)
+            if res.status_code == 200:
+                data = res.json()
+                docs = []
+                if isinstance(data, list):
+                    docs = data
+                elif isinstance(data, dict):
+                    docs = data.get("documents", [data]) if "documents" in data else [data]
+                    
+                if docs and len(docs) > 0:
+                    doc = docs[0]
+                    passages = doc.get("passages", [])
+                    
+                    genes = set()
+                    diseases = set()
+                    chemicals = set()
+                    species = set()
+                    celllines = set()
+                    
+                    full_text_parts = []
+                    for passage in passages:
+                        p_type = passage.get("infons", {}).get("type", "")
+                        p_text = passage.get("text", "")
+                        if p_text:
+                            full_text_parts.append(p_text)
+                        
+                        # Extract annotations
+                        for ann in passage.get("annotations", []):
+                            ann_text = ann.get("text", "")
+                            ann_type = ann.get("infons", {}).get("type", "")
+                            if not ann_type:
+                                ann_type = ann.get("type", "")
+                                
+                            if ann_text and ann_type:
+                                ann_text_clean = ann_text.strip()
+                                if ann_type.lower() == "gene":
+                                    genes.add(ann_text_clean)
+                                elif ann_type.lower() == "disease":
+                                    diseases.add(ann_text_clean)
+                                elif ann_type.lower() in ["chemical", "drug"]:
+                                    chemicals.add(ann_text_clean)
+                                elif ann_type.lower() == "species":
+                                    species.add(ann_text_clean)
+                                elif ann_type.lower() in ["cellline", "cell_line"]:
+                                    celllines.add(ann_text_clean)
+                                    
+                    paper["genes"] = sorted(list(genes))[:15]
+                    paper["diseases"] = sorted(list(diseases))[:15]
+                    paper["chemicals"] = sorted(list(chemicals))[:15]
+                    paper["species"] = sorted(list(species))[:15]
+                    paper["celllines"] = sorted(list(celllines))[:15]
+                    
+                    if pmcid and len(full_text_parts) > 1:
+                        full_text_raw = "\n\n".join(full_text_parts)
+                        paper["full_text"] = full_text_raw[:8000]
+                        paper["full_text_available"] = True
+        except Exception as e:
+            pass
+    return papers
 
 def fetch_pubmed_papers(keywords, journal, max_results=5):
     """
@@ -116,69 +249,92 @@ def fetch_pubmed_papers(keywords, journal, max_results=5):
 # 저널별 평가 프로필 정의 (난이도, 중점 심사 기준, 평가 지침)
 JOURNAL_PROFILES = {
     "PLOS Pathogens": {
-        "difficulty": "매우 높음 (Top-tier 저널, 높은 수준의 병원성 메커니즘 검증 및 In vivo 데이터 필수)",
-        "focus": "병원성 기전의 심층 규명, 생체 내(In vivo) 검증의 유무, 기생충-숙주 상호작용의 구체성",
-        "instructions": "매우 보수적이고 엄격하게 점수를 매기십시오. 단순 현상 기술이나 데이터 양이 적은 연구는 감점을 크게 하며, 70점 이상을 받기가 극히 어렵습니다.",
+        "difficulty": "매우 높음 (Top-tier 병원체 분야 대표 저널, Impact Factor ~6.0대, 무조건적인 신규 분자 메커니즘 규명 필수)",
+        "focus": "호스트-패스오젠 상호작용(Host-Pathogen Interactions)의 정밀한 세포학적/분자 생물학적 기전 규명 여부, 생체 내(In vivo) 마우스/동물 모델 검증 필수, CRISPR/Cas9 등 유전자 녹아웃(Knockout)/과발현(Overexpression) 대조군 데이터 구비 여부, 통계적 유의성(Biological replicates & power analysis)의 엄밀함.",
+        "instructions": "세계적인 피어 리뷰어 수준으로 현미경 수준의 깐깐한 심사를 수행하십시오. 단순한 감염 현상 기술(Descriptive study)이나 데이터의 규모가 적은 연구는 과감히 50점 이하의 Desk Reject 판정을 내립니다. 가설이 명확하게 정립되고 모든 하위 실험들이 이 기전을 입증하기 위해 입체적으로 구성되어야만 70점 이상(Major Revision 이상)을 획득할 수 있습니다.",
         "tier": "top"
     },
     "International Journal for Parasitology (IJP)": {
-        "difficulty": "높음 (기생충학 분야 최고의 전통 저널)",
-        "focus": "분자생물학적/면역학적 분석의 타당성, 기생충 모델의 독창성 및 학술적 깊이",
-        "instructions": "학술적 참신함과 논리적 완성도가 높아야 75점 이상을 부여합니다. 생리학적/면역학적 메커니즘을 상세히 다루었는지 엄밀히 평가하십시오.",
+        "difficulty": "높음 (기생충학 분야 최고의 권위와 역사적인 저널, Impact Factor ~3.5대)",
+        "focus": "분자기생충학(Molecular Parasitology), 기생충 면역 생리 메커니즘의 독창성, 기생 생물 모델(In vivo/In vitro)의 생물학적 타당성, 유전적 다양성 및 약물 내성 메커니즘 분석의 엄밀함.",
+        "instructions": "학술적 참신함과 논리적 완결성이 극도로 높아야 75점 이상을 부여합니다. 실험 방법론에서 음성/양성 대조군(Negative/Positive Controls)이 확실하게 셋팅되었는지, 기생충 발달 단계(Life stages)별 특이적인 발견이 포함되었는지를 유심히 살피십시오. 단순 모니터링성 논문은 감점 요인입니다.",
         "tier": "high"
     },
     "TRENDS IN PARASITOLOGY": {
-        "difficulty": "매우 높음 (높은 임팩트의 리뷰 및 트렌드 의견 제시 위주 저널)",
-        "focus": "해당 분야를 선도할 수 있는 참신한 통찰력과 학술적 영향력, 명확한 개념적 진보",
-        "instructions": "연구 데이터의 참신성뿐만 아니라, 해당 원고가 Parasitology 분야 전체에 미치는 개념적이고 패러다임적인 영향력을 기준으로 엄격하게 평가하십시오.",
+        "difficulty": "매우 높음 (리뷰 및 트렌드 의견 제시 전문 고임팩트 저널, Impact Factor ~8.0대)",
+        "focus": "기생충학 분야의 전반적인 패러다임을 바꿀 수 있는 수준의 개념적 진보(Conceptual Advance), 미래 연구 방향성의 설득력 있는 제시, 최신 발견들의 긴밀한 통합적 분석(Synthesis)과 입체적 시각화 도표(Figures/Models) 제안.",
+        "instructions": "이 저널은 오리지널 연구 데이터(Original research data)를 투고하는 곳이 아니라 최신 트렌드를 정리하고 패러다임을 제안하는 리뷰 저널임을 명심하십시오. 따라서 원고가 기생충학계 전체에 유의미한 새로운 시각을 주는 '개념적 기여'가 보이지 않는다면 즉각 Reject하십시오. 매우 혁신적이고 넓은 학술적 통찰력을 보이는 경우에만 80점 이상의 고득점을 부여하십시오.",
         "tier": "top"
     },
     "Parasites & Vectors": {
-        "difficulty": "보통 (실용적이고 기술적인 연구도 많이 수용)",
-        "focus": "매개체-기생충 상호작용 및 역학 연구, 실험 결과의 실무적 적용 가능성 및 데이터 신뢰도",
-        "instructions": "기존에 잘 알려진 주제라도 데이터가 견고하고 역학적 가치가 있다면 점수를 합리적으로 부여(70~85점 가능)하십시오. 불필요하게 점수를 깎기보다 데이터 검증성에 초점을 맞추십시오.",
+        "difficulty": "보통 (매개체 및 기생충 질병 치료/역학 전문 OA 저널, Impact Factor ~3.0대)",
+        "focus": "매개곤충(Vector)-기생체(Parasite) 상호작용, 역학적 현장 조사(Field Study) 데이터의 신뢰도 및 표본 크기(Sample size), 살충제 저항성(Insecticide resistance) 유전체 분석의 실무적 유용성.",
+        "instructions": "기존에 잘 알려진 이론의 단순 현장 적용(예: 특정 지역 분포 조사)이더라도 표본 분석 규모가 충분하고 현장 데이터가 견고하다면 합리적으로 수용(70~85점 가능)하십시오. 복잡한 유전자 메커니즘 분석보다는 방법론의 투명성과 데이터의 실무적 방제 기여 가치에 엄격한 기준을 들이대십시오.",
         "tier": "mid"
     },
     "PLoS Neglected Tropical Diseases": {
-        "difficulty": "높음 (소외된 열대 질환 관련 대표 저널)",
-        "focus": "NTD 질환에 대한 공중보건학적 의의, 병원성 분석, 역학적 유용성 및 실용성",
-        "instructions": "공중보건적 임팩트와 병리 메커니즘을 동시에 균형 있게 평가하십시오. 소외 질환 퇴치에 어떻게 기여하는지 명확해야 높은 점수를 얻습니다.",
+        "difficulty": "높음 (소외 열대 질환 분야의 독보적 대표 저널, Impact Factor ~3.8대)",
+        "focus": "WHO 지정 소외 열대 질환(NTD)에 대한 공중보건학적 임팩트(Public Health Impact), 병리생태학적 분석의 깊이, 실제 진단법/치료제 개발의 임상적/실용적 유용성 및 질병 부담(Burden of Disease) 경감 기여성.",
+        "instructions": "단순 실험실 데이터에 그치지 않고, 임상 현장이나 공중보건 역학 연구에 직접 연결될 수 있는 가치를 가졌는지 평가하십시오. 임상적 의미나 역학적 기여도가 불분명할 경우 점수를 낮게 매기십시오. 논문이 현장의 질병 퇴치 로드맵에 어떻게 기여하는지 요약 내용에 포함해야 합니다.",
         "tier": "high"
     },
     "Frontiers in Microbiology": {
-        "difficulty": "보통-높음 (넓은 스펙트럼의 미생물/면역 분야 저널)",
-        "focus": "미생물학적 기초 연구, 면역학적 분석, 실험 방법론의 타당성과 명확성",
-        "instructions": "데이터가 체계적이고 결론을 지지하기에 타당하다면 합리적인 점수대(65~80점)를 유연하게 제공하십시오.",
+        "difficulty": "보통-높음 (미생물학 분야의 거대 대표 저널, Impact Factor ~4.0대)",
+        "focus": "미생물학/면역학적 기초 연구 데이터의 체계성, 오믹스(RNA-seq/Metagenomics) 분석 파이프라인의 방법론적 엄밀성, 통계적 검정의 타당성 및 재현성 확보.",
+        "instructions": "실험 데이터가 결론을 충분히 뒷받침할 만큼 견고하고 방법론에 맹점이 없다면 비교적 유연하게 65~80점 범주 내에서 게재 가능성을 열어두어 평가하십시오. 다만 생정보학적 분석의 경우 표준 워크플로우를 충실히 준수했는지 비판적으로 보십시오.",
         "tier": "mid-high"
     },
     "Journal of Eukaryotic Microbiology": {
-        "difficulty": "보통 (진핵 미생물 전문 저널)",
-        "focus": "원생동물의 세포생물학, 분류학, 진화 및 유전학적 분석",
-        "instructions": "생물학적 발견의 고유성에 가치를 두되, 데이터가 타당하고 체계적이라면 70점 내외의 긍정적인 점수를 부여하십시오.",
+        "difficulty": "보통 (진핵 미생물 전문 정통 저널, Impact Factor ~2.0대)",
+        "focus": "원생동물(Protozoa) 및 진핵 단세포 생물의 미세구조(Ultrastructure), 분자계통학적 분류(Phylogeny), 진화생물학적 신규성 및 분류동정의 정확성.",
+        "instructions": "기하학적/미세 구조 분석이나 계통 분석 등 형태학적이고 진화적인 데이터의 정확성에 초점을 맞추어 엄격하게 심사하십시오. 고난도의 인비보 기능 분석이 없더라도 분류/동정 학설상의 중요한 발견이면 좋은 평가(70점 내외)를 매길 수 있습니다.",
         "tier": "mid"
     },
     "Frontiers in Cellular and Infection Microbiology": {
-        "difficulty": "보통-높음 (감염 및 세포 미생물학 전문 저널)",
-        "focus": "숙주-기생충 상호작용 시 세포 수준의 기전 분석, 감염 모델의 정확성",
-        "instructions": "감염 세포 수준의 메커니즘이 잘 입증되었다면 비교적 유연한 합격 점수를 수용할 수 있습니다.",
+        "difficulty": "보통-높음 (감염 및 세포 미생물학 전문 저널, Impact Factor ~4.5대)",
+        "focus": "세포 수준에서의 감염 및 면역학적 반응 기전(Cellular signaling pathways), 숙주 세포 침입 및 증식(Invasion & Proliferation) 메커니즘 규명 강도, 체외(In vitro) 3D 감염 모델의 진보성.",
+        "instructions": "감염 과정 중 호스트 세포 내부의 구체적인 신호 전달 기전이 웨스턴 블롯, ELISA, 형광 이미지 등을 통해 세포 수준에서 입증되는지 엄격히 따지십시오. 입증 메커니즘이 모호하고 정량 분석이 미흡하다면 리젝트를 내리십시오.",
         "tier": "mid-high"
     }
 }
 
 def analyze_manuscript(abstract_text, target_journal, keywords, matching_papers, api_key_valid, api_key):
     """
-    Run Gemini LLM Agent to analyze manuscript peer-review and calculate success probability.
+    Run Llama-3.3-Nemotron-Super-49B LLM Agent to analyze manuscript peer-review and calculate success probability.
     """
     if not api_key_valid:
         return {
-            "error": "유효한 Google Gemini API Key가 설정되지 않았습니다. 사이드바에 API 키를 입력해 주세요."
+            "error": "유효한 NVIDIA API Key가 설정되지 않았습니다. 사이드바에 API 키를 입력해 주세요."
         }
         
     try:
-        genai.configure(api_key=api_key)
         background_context = ""
         for i, paper in enumerate(matching_papers, 1):
-            background_context += f"Paper {i}:\nTitle: {paper['title']}\nAbstract: {paper['abstract']}\n\n"
+            sim_pct = int(paper.get("similarity", 0) * 100)
+            ft_status = "Full-Text (PMC)" if paper.get("full_text_available") else "Abstract Only"
+            
+            background_context += f"Paper {i} (Similarity: {sim_pct}%, Source: {ft_status}):\n"
+            background_context += f"Title: {paper['title']}\n"
+            
+            entities_str = []
+            if paper.get("genes"):
+                entities_str.append(f"Genes: {', '.join(paper['genes'])}")
+            if paper.get("diseases"):
+                entities_str.append(f"Diseases: {', '.join(paper['diseases'])}")
+            if paper.get("chemicals"):
+                entities_str.append(f"Chemicals/Drugs: {', '.join(paper['chemicals'])}")
+            if paper.get("species"):
+                entities_str.append(f"Species: {', '.join(paper['species'])}")
+            if paper.get("celllines"):
+                entities_str.append(f"Cell Lines: {', '.join(paper['celllines'])}")
+                
+            if entities_str:
+                background_context += f"Identified Entities: {'; '.join(entities_str)}\n"
+                
+            if paper.get("full_text_available") and paper.get("full_text"):
+                background_context += f"Content (PMC Full-Text Snippet):\n{paper['full_text']}\n\n"
+            else:
+                background_context += f"Content (Abstract):\n{paper['abstract']}\n\n"
             
         # 저널 프로필 획득
         journal_info = JOURNAL_PROFILES.get(target_journal, {
@@ -209,7 +365,7 @@ def analyze_manuscript(abstract_text, target_journal, keywords, matching_papers,
 [대상 논문 원고/초록]
 {abstract_text}
 
-[최신 유사 합격 논문 정보 (PubMed 검색 결과)]
+[최신 유사 합격 논문 정보 (PubMed 검색 결과 및 PubTator/PMC 추출 데이터)]
 {background_context}
 
 ---
@@ -239,14 +395,28 @@ def analyze_manuscript(abstract_text, target_journal, keywords, matching_papers,
 }}
 ```
 """
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(
-            prompt, 
-            generation_config={"response_mime_type": "application/json"}
+        # NVIDIA integrate.api.nvidia.com OpenAI-compatible 클라이언트 초기화
+        client = OpenAI(
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=api_key
+        )
+        
+        response = client.chat.completions.create(
+            model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.3,
+            top_p=0.95,
+            max_tokens=16384,
+            frequency_penalty=0,
+            presence_penalty=0,
+            stream=False
         )
         
         import json
-        result = json.loads(response.text.strip())
+        result = json.loads(response.choices[0].message.content.strip())
         return result
     except Exception as e:
         return {
@@ -508,6 +678,33 @@ st.markdown("""
         border-radius: 3px;
         letter-spacing: 0.04em;
     }
+
+    /* ── Biological entity and similarity badges ── */
+    .badge-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        margin-top: 0.4rem;
+        margin-bottom: 0.4rem;
+    }
+    .ent-badge {
+        font-family: var(--ff-data) !important;
+        font-size: 0.62rem !important;
+        padding: 0.1rem 0.35rem;
+        border-radius: 3px;
+        letter-spacing: 0.01em;
+        font-weight: 500;
+        border: 1px solid transparent;
+        display: inline-block;
+    }
+    .badge-sim { background: rgba(200, 191, 169, 0.15); color: var(--buff) !important; border-color: rgba(200, 191, 169, 0.3); }
+    .badge-gene { background: rgba(99, 102, 241, 0.1); color: var(--haema) !important; border-color: rgba(99, 102, 241, 0.25); }
+    .badge-disease { background: rgba(232, 98, 124, 0.1); color: var(--eosin) !important; border-color: rgba(232, 98, 124, 0.25); }
+    .badge-chem { background: rgba(52, 211, 153, 0.1); color: var(--viridian) !important; border-color: rgba(52, 211, 153, 0.25); }
+    .badge-full { background: rgba(237, 237, 237, 0.1); color: var(--bone) !important; border-color: rgba(237, 237, 237, 0.25); }
+    .badge-spec { background: rgba(240, 160, 80, 0.1); color: #F0A050 !important; border-color: rgba(240, 160, 80, 0.25); }
+    .badge-cell { background: rgba(200, 191, 169, 0.08); color: var(--buff) !important; border-color: rgba(200, 191, 169, 0.2); }
+
 
     /* ── Input section heading ── */
     .input-heading {
@@ -803,11 +1000,13 @@ st.markdown("""
     <div class="content">
         <h1>Parasitology Journal<br/>Acceptance Guide</h1>
         <div class="desc">
-            원고를 업로드하면 PubMed 합격 논문과 대조 분석 후, AI 가상 피어리뷰를 수행합니다.
+            원고를 업로드하면 PubMed 최신 논문 검색 후 Reranking, PubTator 생물학적 엔티티 분석 및 PMC Full Text 기반으로 대조 분석하여 AI 피어리뷰를 수행합니다.
         </div>
         <div class="meta">
-            <span class="chip">Gemini 2.5 Flash</span>
-            <span class="chip">PubMed Entrez API</span>
+            <span class="chip">NVIDIA Nemotron Super 49B</span>
+            <span class="chip">Cosine Reranker</span>
+            <span class="chip">PubTator Entity Extractor</span>
+            <span class="chip">PubMed & PMC Full Text</span>
         </div>
     </div>
 </div>
@@ -839,23 +1038,23 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 🔑 API 설정")
     user_api_key = st.text_input(
-        "Google Gemini API Key 입력",
+        "NVIDIA API Key 입력",
         type="password",
-        placeholder="AI Studio에서 발급받은 API 키를 입력하세요...",
+        placeholder="build.nvidia.com에서 발급받은 API 키(nvapi-...)를 입력하세요...",
         help="입력하지 않으면 기본 서버 환경설정(.env)의 API 키를 사용합니다."
     )
 
-    selected_key = user_api_key.strip() if user_api_key.strip() else env_gemini_key.strip()
+    selected_key = user_api_key.strip() if user_api_key.strip() else env_nvidia_key.strip()
     is_api_key_valid = False
-    if selected_key and not selected_key.startswith("your_gemini_api_key") and selected_key != "":
+    if selected_key and not selected_key.startswith("your_nvidia_api_key") and selected_key != "":
         is_api_key_valid = True
         st.success("API 키 설정 완료")
     else:
-        st.error("Gemini API 키를 입력해 주세요. (미설정 상태)")
+        st.error("NVIDIA API 키를 입력해 주세요. (미설정 상태)")
 
     st.markdown("---")
     st.markdown("### 🛡️ 데이터 보호")
-    st.caption("원고 데이터는 Google AI Studio를 통해 일회성 처리되며, 학습에 반영하지 않고 분석합니다.")
+    st.caption("원고 데이터는 NVIDIA NIM API를 통해 일회성 처리되며, 학습에 반영하지 않고 분석합니다.")
 
 
 # ═════════════════════════════════════
@@ -936,12 +1135,33 @@ if submit_button:
     elif not abstract_text:
         st.warning("원고 내용을 입력해 주세요.")
     else:
-        # ── PubMed search ──
-        with st.spinner("PubMed에서 논문을 검색하고 있습니다..."):
-            matching_papers = fetch_pubmed_papers(keywords, target_journal, max_results=max_papers)
+        # ── PubMed search & Rerank ──
+        with st.spinner("PubMed에서 관련 논문을 검색 및 Reranking하고 있습니다..."):
+            # 1. 2배수 후보 검색 (최소 15개)
+            max_candidates = max(max_papers * 2, 15)
+            candidates = fetch_pubmed_papers(keywords, target_journal, max_results=max_candidates)
+            
+            if candidates:
+                # 2. Cosine Similarity 계산 및 Rerank
+                for paper in candidates:
+                    paper_text = f"{paper['title']} {paper['abstract']}"
+                    # 사용자 원고와 매칭도 평가
+                    paper['similarity'] = get_cosine_similarity(abstract_text + " " + keywords, paper_text)
+                
+                # 유사도 기준 내림차순 정렬
+                candidates.sort(key=lambda x: x.get('similarity', 0), reverse=True)
+                
+                # 3. Top-N 선별
+                selected_papers = candidates[:max_papers]
+                
+                # 4. PubTator 생물학적 엔티티 & PMC Full Text 추출로 강화
+                with st.spinner("PubTator API 및 PMC Full-Text 데이터를 파싱하는 중..."):
+                    matching_papers = enrich_papers_with_pubtator_and_pmc(selected_papers)
+            else:
+                matching_papers = []
 
         st.markdown(
-            '<div class="sec-heading">📚 PubMed 매칭 논문 <span class="label">step 1</span></div>',
+            '<div class="sec-heading">📚 PubMed 매칭 논문 (Reranked & PubTator 분석) <span class="label">step 1</span></div>',
             unsafe_allow_html=True
         )
 
@@ -953,13 +1173,31 @@ if submit_button:
                 with cols[idx % 2]:
                     paper_url = f"https://pubmed.ncbi.nlm.nih.gov/{paper['pmid']}/" if paper.get("pmid") else "#"
                     abs_text = paper["abstract"][:160] + "..." if len(paper["abstract"]) > 160 else paper["abstract"]
+                    
+                    # 배지 생성
+                    sim_pct = int(paper.get("similarity", 0) * 100)
+                    sim_badge = f'<span class="ent-badge badge-sim">유사도: {sim_pct}%</span>'
+                    
+                    ft_badge = ""
+                    if paper.get("full_text_available"):
+                        ft_badge = '<span class="ent-badge badge-full">PMC Full-Text</span>'
+                        
+                    gene_badges = "".join([f'<span class="ent-badge badge-gene">{g}</span>' for g in paper.get("genes", [])[:2]])
+                    disease_badges = "".join([f'<span class="ent-badge badge-disease">{d}</span>' for d in paper.get("diseases", [])[:2]])
+                    chem_badges = "".join([f'<span class="ent-badge badge-chem">{c}</span>' for c in paper.get("chemicals", [])[:2]])
+                    spec_badges = "".join([f'<span class="ent-badge badge-spec">{s}</span>' for s in paper.get("species", [])[:2]])
+                    cell_badges = "".join([f'<span class="ent-badge badge-cell">{cl}</span>' for cl in paper.get("celllines", [])[:2]])
+                    
+                    badges_html = f'<div class="badge-container">{sim_badge}{ft_badge}{spec_badges}{gene_badges}{disease_badges}{chem_badges}{cell_badges}</div>'
+                    
                     st.markdown(f"""
                     <div class="pub-card">
                         <div class="pub-year">{paper['year']}</div>
                         <div class="pub-title">{paper['title']}</div>
                         <div class="pub-authors">{paper['authors']}</div>
-                        <div class="pub-abstract">{abs_text}</div>
-                        <div class="pub-link"><a href="{paper_url}" target="_blank">PubMed →</a></div>
+                        {badges_html}
+                        <div class="pub-abstract" style="margin-top:0.4rem;">{abs_text}</div>
+                        <div class="pub-link" style="margin-top:0.4rem;"><a href="{paper_url}" target="_blank">PubMed →</a></div>
                     </div>
                     """, unsafe_allow_html=True)
 

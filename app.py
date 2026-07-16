@@ -304,9 +304,8 @@ st.markdown("""
         font-weight: 600 !important;
     }
     section[data-testid="stSidebar"] p,
-    section[data-testid="stSidebar"] span,
-    section[data-testid="stSidebar"] div,
-    section[data-testid="stSidebar"] label {
+    section[data-testid="stSidebar"] label,
+    section[data-testid="stSidebar"] li {
         font-family: var(--ff-body) !important;
         color: var(--bone) !important;
     }
@@ -341,24 +340,27 @@ st.markdown("""
         border-color: var(--haema) !important;
         box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.3) !important;
     }
-    [data-testid="stTextInputRootElement"] * {
+    [data-testid="stTextInputRootElement"] input {
         background-color: transparent !important;
         border: none !important;
-        box-shadow: none !important;
-    }
-    [data-testid="stTextInputRootElement"] input {
         color: var(--bone) !important;
         font-family: var(--ff-body) !important;
         font-size: 0.92rem !important;
         width: 100% !important;
+        box-shadow: none !important;
+    }
+    [data-testid="stTextInputRootElement"] input:focus {
+        border: none !important;
+        box-shadow: none !important;
     }
     [data-testid="stTextInputRootElement"] button {
+        background-color: transparent !important;
+        border: none !important;
         color: var(--dim) !important;
+        box-shadow: none !important;
     }
-    section[data-testid="stSidebar"] [data-testid="stTextInputRootElement"] span,
-    section[data-testid="stSidebar"] [data-testid="stTextInputRootElement"] div,
-    section[data-testid="stSidebar"] [data-testid="stTextInputRootElement"] button {
-        font-family: 'Material Symbols Outlined', 'Material Symbols Rounded', 'Material Icons', inherit !important;
+    [data-testid="stTextInputRootElement"] button:hover {
+        background-color: transparent !important;
     }
     
     .stTextArea > div > div > textarea {

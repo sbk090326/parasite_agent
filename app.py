@@ -1,8 +1,12 @@
 import os
+import ssl
 import streamlit as st
 from dotenv import load_dotenv
 from Bio import Entrez
 from openai import OpenAI
+
+# Bypass SSL certificate verification for NCBI Entrez and other requests
+ssl._create_default_https_context = ssl._create_unverified_context
 
 # Load environment variables
 load_dotenv()
@@ -246,57 +250,158 @@ def fetch_pubmed_papers(keywords, journal, max_results=5):
         st.error(f"PubMed API Error: {str(e)}")
         return []
 
-# 저널별 평가 프로필 정의 (난이도, 중점 심사 기준, 평가 지침)
+# 저널별 평가 프로필 정의 (난이도, 중점 심사 기준, 평가 지침, 루브릭 가중치)
 JOURNAL_PROFILES = {
     "PLOS Pathogens": {
         "difficulty": "매우 높음 (Top-tier 병원체 분야 대표 저널, Impact Factor ~6.0대, 무조건적인 신규 분자 메커니즘 규명 필수)",
         "focus": "호스트-패스오젠 상호작용(Host-Pathogen Interactions)의 정밀한 세포학적/분자 생물학적 기전 규명 여부, 생체 내(In vivo) 마우스/동물 모델 검증 필수, CRISPR/Cas9 등 유전자 녹아웃(Knockout)/과발현(Overexpression) 대조군 데이터 구비 여부, 통계적 유의성(Biological replicates & power analysis)의 엄밀함.",
         "instructions": "세계적인 피어 리뷰어 수준으로 현미경 수준의 깐깐한 심사를 수행하십시오. 단순한 감염 현상 기술(Descriptive study)이나 데이터의 규모가 적은 연구는 과감히 50점 이하의 Desk Reject 판정을 내립니다. 가설이 명확하게 정립되고 모든 하위 실험들이 이 기전을 입증하기 위해 입체적으로 구성되어야만 70점 이상(Major Revision 이상)을 획득할 수 있습니다.",
-        "tier": "top"
+        "tier": "top",
+        "weights": {
+            "novelty": 0.25,
+            "methodology": 0.35,      # 방법론과 대조군에 매우 엄격한 가중치
+            "data_completeness": 0.20,
+            "journal_fit": 0.10,
+            "presentation": 0.10
+        },
+        "weight_description": "분자 기전과 In vivo 동물 검증, CRISPR 대조군 완비 여부(Methodology & Controls)에 35%의 지배적인 가중치를 부여합니다."
     },
     "International Journal for Parasitology (IJP)": {
         "difficulty": "높음 (기생충학 분야 최고의 권위와 역사적인 저널, Impact Factor ~3.5대)",
         "focus": "분자기생충학(Molecular Parasitology), 기생충 면역 생리 메커니즘의 독창성, 기생 생물 모델(In vivo/In vitro)의 생물학적 타당성, 유전적 다양성 및 약물 내성 메커니즘 분석의 엄밀함.",
         "instructions": "학술적 참신함과 논리적 완결성이 극도로 높아야 75점 이상을 부여합니다. 실험 방법론에서 음성/양성 대조군(Negative/Positive Controls)이 확실하게 셋팅되었는지, 기생충 발달 단계(Life stages)별 특이적인 발견이 포함되었는지를 유심히 살피십시오. 단순 모니터링성 논문은 감점 요인입니다.",
-        "tier": "high"
+        "tier": "high",
+        "weights": {
+            "novelty": 0.30,          # 참신한 면역 생리 기전에 가중치
+            "methodology": 0.25,
+            "data_completeness": 0.20,
+            "journal_fit": 0.15,
+            "presentation": 0.10
+        },
+        "weight_description": "기생충 특이적 생리/면역 메커니즘의 학술적 신규성(Novelty)에 30%, 대조군 완비 상태(Methodology)에 25%의 가중치를 둡니다."
     },
     "TRENDS IN PARASITOLOGY": {
         "difficulty": "매우 높음 (리뷰 및 트렌드 의견 제시 전문 고임팩트 저널, Impact Factor ~8.0대)",
         "focus": "기생충학 분야의 전반적인 패러다임을 바꿀 수 있는 수준의 개념적 진보(Conceptual Advance), 미래 연구 방향성의 설득력 있는 제시, 최신 발견들의 긴밀한 통합적 분석(Synthesis)과 입체적 시각화 도표(Figures/Models) 제안.",
         "instructions": "이 저널은 오리지널 연구 데이터(Original research data)를 투고하는 곳이 아니라 최신 트렌드를 정리하고 패러다임을 제안하는 리뷰 저널임을 명심하십시오. 따라서 원고가 기생충학계 전체에 유의미한 새로운 시각을 주는 '개념적 기여'가 보이지 않는다면 즉각 Reject하십시오. 매우 혁신적이고 넓은 학술적 통찰력을 보이는 경우에만 80점 이상의 고득점을 부여하십시오.",
-        "tier": "top"
+        "tier": "top",
+        "weights": {
+            "novelty": 0.45,          # 패러다임적 개념 진보에 압도적 가중치
+            "methodology": 0.05,      # 실험 원 데이터 비중은 극도로 최소화
+            "data_completeness": 0.10,
+            "journal_fit": 0.30,      # 학술 커뮤니티 트렌드 적합성
+            "presentation": 0.10
+        },
+        "weight_description": "개념적 진보 및 통찰력(Novelty)에 45%, 리뷰 저널로서의 논지 전개 및 적합성(Journal Fit)에 30%의 지배적 가중치를 두며, 오리지널 데이터 방법론(Methodology) 비중은 5%로 제한합니다."
     },
     "Parasites & Vectors": {
         "difficulty": "보통 (매개체 및 기생충 질병 치료/역학 전문 OA 저널, Impact Factor ~3.0대)",
         "focus": "매개곤충(Vector)-기생체(Parasite) 상호작용, 역학적 현장 조사(Field Study) 데이터의 신뢰도 및 표본 크기(Sample size), 살충제 저항성(Insecticide resistance) 유전체 분석의 실무적 유용성.",
         "instructions": "기존에 잘 알려진 이론의 단순 현장 적용(예: 특정 지역 분포 조사)이더라도 표본 분석 규모가 충분하고 현장 데이터가 견고하다면 합리적으로 수용(70~85점 가능)하십시오. 복잡한 유전자 메커니즘 분석보다는 방법론의 투명성과 데이터의 실무적 방제 기여 가치에 엄격한 기준을 들이대십시오.",
-        "tier": "mid"
+        "tier": "mid",
+        "weights": {
+            "novelty": 0.15,
+            "methodology": 0.20,
+            "data_completeness": 0.30, # 현장 표본 분석 및 대규모 데이터 중시
+            "journal_fit": 0.20,
+            "presentation": 0.15
+        },
+        "weight_description": "대규모 현장 샘플 규모 및 통계적 확실성(Data & Statistics)에 30%, 실무 역학 통제 기여도(Journal Fit)에 20%의 가중치를 둡니다."
     },
     "PLoS Neglected Tropical Diseases": {
         "difficulty": "높음 (소외 열대 질환 분야의 독보적 대표 저널, Impact Factor ~3.8대)",
         "focus": "WHO 지정 소외 열대 질환(NTD)에 대한 공중보건학적 임팩트(Public Health Impact), 병리생태학적 분석의 깊이, 실제 진단법/치료제 개발의 임상적/실용적 유용성 및 질병 부담(Burden of Disease) 경감 기여성.",
         "instructions": "단순 실험실 데이터에 그치지 않고, 임상 현장이나 공중보건 역학 연구에 직접 연결될 수 있는 가치를 가졌는지 평가하십시오. 임상적 의미나 역학적 기여도가 불분명할 경우 점수를 낮게 매기십시오. 논문이 현장의 질병 퇴치 로드맵에 어떻게 기여하는지 요약 내용에 포함해야 합니다.",
-        "tier": "high"
+        "tier": "high",
+        "weights": {
+            "novelty": 0.20,
+            "methodology": 0.20,
+            "data_completeness": 0.25,
+            "journal_fit": 0.25,      # 공중보건학적 임팩트 및 질병 부담 기여도 중시
+            "presentation": 0.10
+        },
+        "weight_description": "소외 질환 통제 임상/공중보건 유용성(Journal Fit)에 25%, 역학 데이터 규모 및 신뢰성(Data)에 25%의 균형 있는 가중치를 둡니다."
     },
     "Frontiers in Microbiology": {
         "difficulty": "보통-높음 (미생물학 분야의 거대 대표 저널, Impact Factor ~4.0대)",
         "focus": "미생물학/면역학적 기초 연구 데이터의 체계성, 오믹스(RNA-seq/Metagenomics) 분석 파이프라인의 방법론적 엄밀성, 통계적 검정의 타당성 및 재현성 확보.",
         "instructions": "실험 데이터가 결론을 충분히 뒷받침할 만큼 견고하고 방법론에 맹점이 없다면 비교적 유연하게 65~80점 범주 내에서 게재 가능성을 열어두어 평가하십시오. 다만 생정보학적 분석의 경우 표준 워크플로우를 충실히 준수했는지 비판적으로 보십시오.",
-        "tier": "mid-high"
+        "tier": "mid-high",
+        "weights": {
+            "novelty": 0.25,          # 기초 학술성 중시
+            "methodology": 0.25,      # 표준 생정보학 파이프라인 엄밀성
+            "data_completeness": 0.20,
+            "journal_fit": 0.15,
+            "presentation": 0.15
+        },
+        "weight_description": "미생물 학술적 기초 발견(Novelty)과 유전체 오믹스 파이프라인 등 표준 분석 방법론(Methodology)에 각각 25%의 가중치를 고루 적용합니다."
     },
     "Journal of Eukaryotic Microbiology": {
         "difficulty": "보통 (진핵 미생물 전문 정통 저널, Impact Factor ~2.0대)",
         "focus": "원생동물(Protozoa) 및 진핵 단세포 생물의 미세구조(Ultrastructure), 분자계통학적 분류(Phylogeny), 진화생물학적 신규성 및 분류동정의 정확성.",
         "instructions": "기하학적/미세 구조 분석이나 계통 분석 등 형태학적이고 진화적인 데이터의 정확성에 초점을 맞추어 엄격하게 심사하십시오. 고난도의 인비보 기능 분석이 없더라도 분류/동정 학설상의 중요한 발견이면 좋은 평가(70점 내외)를 매길 수 있습니다.",
-        "tier": "mid"
+        "tier": "mid",
+        "weights": {
+            "novelty": 0.20,
+            "methodology": 0.30,      # 형태 구조 분석 및 계통 분류의 정확성에 가장 높은 비중
+            "data_completeness": 0.20,
+            "journal_fit": 0.15,
+            "presentation": 0.15
+        },
+        "weight_description": "진핵 단세포 미세구조 기하학 분석 및 계통수(Phylogeny) 동정 분류 정확성(Methodology)에 30%의 가장 높은 가중치를 배정합니다."
     },
     "Frontiers in Cellular and Infection Microbiology": {
         "difficulty": "보통-높음 (감염 및 세포 미생물학 전문 저널, Impact Factor ~4.5대)",
         "focus": "세포 수준에서의 감염 및 면역학적 반응 기전(Cellular signaling pathways), 숙주 세포 침입 및 증식(Invasion & Proliferation) 메커니즘 규명 강도, 체외(In vitro) 3D 감염 모델의 진보성.",
         "instructions": "감염 과정 중 호스트 세포 내부의 구체적인 신호 전달 기전이 웨스턴 블롯, ELISA, 형광 이미지 등을 통해 세포 수준에서 입증되는지 엄격히 따지십시오. 입증 메커니즘이 모호하고 정량 분석이 미흡하다면 리젝트를 내리십시오.",
-        "tier": "mid-high"
+        "tier": "mid-high",
+        "weights": {
+            "novelty": 0.25,
+            "methodology": 0.30,      # 웨스턴블롯/이미징 세포 메커니즘 검증 비중
+            "data_completeness": 0.20,
+            "journal_fit": 0.15,
+            "presentation": 0.10
+        },
+        "weight_description": "숙주 세포 신호 전달 분석 및 체외 감염 모델 검증(Methodology)에 30%의 가중치를 적용합니다."
     }
 }
+
+def summarize_paper(title, full_text, api_key):
+    """
+    Summarize a single PMC full-text paper using LLM to extract key scientific points
+    without dense experimental protocols to prevent safety filter triggers.
+    """
+    client = OpenAI(
+        base_url="https://integrate.api.nvidia.com/v1",
+        api_key=api_key
+    )
+    prompt = f"""
+당신은 세계적인 의학 및 생물학 전문 학술 에디터입니다. 아래 제공된 학술 논문의 본문 일부(PMC Full-Text)를 읽고, 다른 논문과의 학술적 대조 분석에 필요한 핵심 요약본을 한국어로 작성해 주세요.
+
+[요구사항]
+- 핵심 가설, 주요 분자/세포 생물학적 기전(Signaling pathways, genes, proteins), 주요 연구 결과, 그리고 학술적 결론을 중심으로 600자 내외로 조리 있게 작성하십시오.
+- AI 안전 필터(Content Filter) 작동을 유발하는 구체적인 세포 배양/감염 프로토콜, 화학적 버퍼 혼합비 등 불필요하게 위험하거나 상세한 실험 프로토콜(Experimental protocols) 세부 사항은 완전히 배제하십시오. 오로지 발견 사실과 데이터 비교에 유용한 연구 사실에 집중하십시오.
+- 오직 한국어로 구성된 요약 텍스트만 출력하십시오.
+
+[논문 제목]
+{title}
+
+[논문 본문]
+{full_text}
+"""
+    try:
+        response = client.chat.completions.create(
+            model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=1000
+        )
+        content = response.choices[0].message.content
+        if content:
+            return content.strip()
+    except Exception:
+        pass
+    return None
 
 def analyze_manuscript(abstract_text, target_journal, keywords, matching_papers, api_key_valid, api_key):
     """
@@ -307,44 +412,84 @@ def analyze_manuscript(abstract_text, target_journal, keywords, matching_papers,
             "error": "유효한 NVIDIA API Key가 설정되지 않았습니다. 사이드바에 API 키를 입력해 주세요."
         }
         
-    try:
-        background_context = ""
-        for i, paper in enumerate(matching_papers, 1):
-            sim_pct = int(paper.get("similarity", 0) * 100)
-            ft_status = "Full-Text (PMC)" if paper.get("full_text_available") else "Abstract Only"
-            
-            background_context += f"Paper {i} (Similarity: {sim_pct}%, Source: {ft_status}):\n"
-            background_context += f"Title: {paper['title']}\n"
-            
-            entities_str = []
-            if paper.get("genes"):
-                entities_str.append(f"Genes: {', '.join(paper['genes'])}")
-            if paper.get("diseases"):
-                entities_str.append(f"Diseases: {', '.join(paper['diseases'])}")
-            if paper.get("chemicals"):
-                entities_str.append(f"Chemicals/Drugs: {', '.join(paper['chemicals'])}")
-            if paper.get("species"):
-                entities_str.append(f"Species: {', '.join(paper['species'])}")
-            if paper.get("celllines"):
-                entities_str.append(f"Cell Lines: {', '.join(paper['celllines'])}")
-                
-            if entities_str:
-                background_context += f"Identified Entities: {'; '.join(entities_str)}\n"
-                
-            if paper.get("full_text_available") and paper.get("full_text"):
-                background_context += f"Content (PMC Full-Text Snippet):\n{paper['full_text']}\n\n"
-            else:
-                background_context += f"Content (Abstract):\n{paper['abstract']}\n\n"
-            
-        # 저널 프로필 획득
-        journal_info = JOURNAL_PROFILES.get(target_journal, {
-            "difficulty": "보통",
-            "focus": "학술적 타당성 및 연구의 신뢰도",
-            "instructions": "일반적인 저널 심사 기준을 따르며, 연구 내용의 데이터 신뢰성을 검증하십시오."
-        })
+    # AI 컨텍스트 윈도우 오버플로우 방지를 위해 업로드된 전체 원고의 길이를 최대 12,000자로 제한합니다.
+    if len(abstract_text) > 12000:
+        abstract_text = abstract_text[:12000] + "\n\n...[Manuscript truncated for LLM context window optimization]..."
         
-        prompt = f"""
+    # 저널 프로필 획득
+    journal_info = JOURNAL_PROFILES.get(target_journal, {
+        "difficulty": "보통",
+        "focus": "학술적 타당성 및 연구의 신뢰도",
+        "instructions": "일반적인 저널 심사 기준을 따며, 연구 내용의 데이터 신뢰성을 검증하십시오."
+    })
+    
+    # NVIDIA integrate.api.nvidia.com OpenAI-compatible 클라이언트 초기화
+    client = OpenAI(
+        base_url="https://integrate.api.nvidia.com/v1",
+        api_key=api_key
+    )
+    
+    weights = journal_info.get("weights", {
+        "novelty": 0.20,
+        "methodology": 0.20,
+        "data_completeness": 0.20,
+        "journal_fit": 0.20,
+        "presentation": 0.20
+    })
+    weight_desc = journal_info.get("weight_description", "모든 평가 요소에 동일한 20%의 가중치를 고르게 부여합니다.")
+    
+    use_summaries = True
+    for attempt in range(2):
+        try:
+            background_context = ""
+            for i, paper in enumerate(matching_papers, 1):
+                sim_pct = int(paper.get("similarity", 0) * 100)
+                
+                # 본문(PMC)이 존재하고 요약본이 아직 캐싱되지 않은 경우, 요약 시도
+                is_ft = paper.get("full_text_available", False) and paper.get("full_text") and use_summaries
+                
+                if is_ft:
+                    if "full_text_summary" not in paper:
+                        summary = summarize_paper(paper["title"], paper["full_text"], api_key)
+                        if summary:
+                            paper["full_text_summary"] = summary
+                        else:
+                            # 요약 실패 시 (또는 필터 차단 시) Abstract로 임시 대체 표기
+                            paper["full_text_summary"] = None
+                    
+                    if paper.get("full_text_summary"):
+                        ft_status = "Full-Text Summary (PMC Map-Reduced)"
+                        content_to_use = paper["full_text_summary"]
+                    else:
+                        ft_status = "Abstract Only (Fallback)"
+                        content_to_use = paper["abstract"]
+                else:
+                    ft_status = "Abstract Only"
+                    content_to_use = paper["abstract"]
+                
+                background_context += f"Paper {i} (Similarity: {sim_pct}%, Source: {ft_status}):\n"
+                background_context += f"Title: {paper['title']}\n"
+                
+                entities_str = []
+                if paper.get("genes"):
+                    entities_str.append(f"Genes: {', '.join(paper['genes'])}")
+                if paper.get("diseases"):
+                    entities_str.append(f"Diseases: {', '.join(paper['diseases'])}")
+                if paper.get("chemicals"):
+                    entities_str.append(f"Chemicals/Drugs: {', '.join(paper['chemicals'])}")
+                if paper.get("species"):
+                    entities_str.append(f"Species: {', '.join(paper['species'])}")
+                if paper.get("celllines"):
+                    entities_str.append(f"Cell Lines: {', '.join(paper['celllines'])}")
+                    
+                if entities_str:
+                    background_context += f"Identified Entities: {'; '.join(entities_str)}\n"
+                    
+                background_context += f"Content:\n{content_to_use}\n\n"
+                
+            prompt = f"""
 당신은 세계적인 기생충학(Parasitology) 및 미생물학 분야의 권위 있는 저널인 **{target_journal}**의 시니어 에디터이자 피어 리뷰어입니다.
+귀하는 학술지의 높은 명성과 수준을 유지하기 위해 투고 원고를 **매우 엄격하고 깐깐하며 비판적인 시각**으로 채점하는 심사위원입니다. 조금이라도 실험 대조군이 부실하거나, 생체외/내(In vitro/In vivo) 입증 데이터에 논리적 공백이 있다면 과감하게 점수를 깎아야 합니다.
 
 연구자가 제출한 아래 [대상 논문 원고/초록]을 읽고, [최신 유사 합격 논문 정보]를 참조하여 종합적인 가상 피어 리뷰 리포트를 작성해 주세요.
 특히, 본 저널({target_journal}) 고유의 투고 난이도 및 평가 기준을 절대적으로 적용하여 엄밀하게 스코어링해야 합니다.
@@ -359,6 +504,15 @@ def analyze_manuscript(abstract_text, target_journal, keywords, matching_papers,
 - 저널의 난이도가 높을수록 더 엄격하고 깐깐하게 점수를 매겨야 합니다. 난이도가 매우 높은 저널의 경우, 본문 내용이나 대조군이 부실하면 50점 이하의 데스크 리젝트(Desk Reject) 위기 점수를 부여해야 합니다.
 - 반면, 비교적 유연한 저널의 경우 데이터가 신뢰할 수 있다면 합리적인 패스 점수를 부여할 수 있습니다.
 
+[저널별 맞춤형 다차원 평가 가중치 지침]
+본 저널 **{target_journal}**의 중점 기준에 따른 각 심사 지표별 가중치는 다음과 같습니다:
+- 학술적 신규성 및 개념적 진보 (novelty): {int(weights['novelty'] * 100)}%
+- 방법론적 엄밀성 및 대조군 설계 (methodology): {int(weights['methodology'] * 100)}%
+- 데이터 완결성 및 통계적 검정 (data_completeness): {int(weights['data_completeness'] * 100)}%
+- 저널 적합성 및 학계 영향력 (journal_fit): {int(weights['journal_fit'] * 100)}%
+- 논리 구조 및 작성 품질 (presentation): {int(weights['presentation'] * 100)}%
+* 가중치 세부 설명: {weight_desc}
+
 [연구 키워드]
 {keywords}
 
@@ -372,13 +526,36 @@ def analyze_manuscript(abstract_text, target_journal, keywords, matching_papers,
 
 **[요구사항 및 리포트 작성 가이드라인]**
 1. **평가 어조**: 전문적이며 건설적이고 예리하게 지적해 주어야 합니다.
-2. **합격 확률**: 0에서 100 사이의 숫자로 합격 가능성을 정량 예측해 주세요. 선택하신 저널의 투고 난이도와 연구 원고의 품질을 반영해야 하므로, 저널에 따라 점수가 뚜렷하게 차이 나야 합니다.
-3. **작성 언어**: 한국어로 출력해야 합니다. 단, 논문의 주요 생물학 용어(예: 유전자명, 경로명, 실험기법 등)는 영어 원문을 함께 기입해 주세요.
-4. **리포트 구성 형식**: 아래 지정된 JSON 포맷으로 반드시 응답해야 하며, 그 외의 다른 텍스트는 절대 포함하지 마십시오.
+2. **합격 확률**: 0에서 100 사이의 숫자로 합격 가능성을 정량 예측해 주세요. (가중치 지침에 따른 sub_scores의 가중평균값에 완벽히 논리적으로 수렴해야 합니다.)
+3. **다차원 평가 루브릭 스코어링**: 5가지 차원(novelty, methodology, data_completeness, journal_fit, presentation)에 대해 각각 0~100점 사이의 상세 점수와 구체적인 한국어 근거(rationale)를 제공하십시오.
+4. **작성 언어**: 한국어로 출력해야 합니다. 단, 논문의 주요 생물학 용어(예: 유전자명, 경로명, 실험기법 등)는 영어 원문을 함께 기입해 주세요.
+5. **리포트 구성 형식**: 아래 지정된 JSON 포맷으로 반드시 응답해야 하며, 그 외의 다른 텍스트는 절대 포함하지 마십시오.
 
 ```json
 {{
-  "score": 75,
+  "score": 73,
+  "sub_scores": {{
+    "novelty": {{
+      "score": 80,
+      "rationale": "신규 분자 표적 또는 독창적 메커니즘을 제시하였으나..."
+    }},
+    "methodology": {{
+      "score": 65,
+      "rationale": "음성/양성 대조군은 양호하지만 In vivo 마우스 동물 실험이나 특정 유전자 넉아웃 대조군 데이터가 미흡..."
+    }},
+    "data_completeness": {{
+      "score": 70,
+      "rationale": "실험 반복 횟수에 대한 통계적 유의성 검정이 부족..."
+    }},
+    "journal_fit": {{
+      "score": 85,
+      "rationale": "숙주-기생체 면역 반응을 다루어 저널의 핵심 주제에 부합..."
+    }},
+    "presentation": {{
+      "score": 75,
+      "rationale": "논문의 구성은 매끄러우나 특정 용어(예: autophagy)에 대한 통일성이 필요..."
+    }}
+  }},
   "journal_fit": "저널 적합성에 대한 2-3문장 분석",
   "strengths": [
     "강점 1 (예: 참신한 메커니즘 규명 등)",
@@ -395,33 +572,62 @@ def analyze_manuscript(abstract_text, target_journal, keywords, matching_papers,
 }}
 ```
 """
-        # NVIDIA integrate.api.nvidia.com OpenAI-compatible 클라이언트 초기화
-        client = OpenAI(
-            base_url="https://integrate.api.nvidia.com/v1",
-            api_key=api_key
-        )
-        
-        response = client.chat.completions.create(
-            model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.3,
-            top_p=0.95,
-            max_tokens=16384,
-            frequency_penalty=0,
-            presence_penalty=0,
-            stream=False
-        )
-        
-        import json
-        result = json.loads(response.choices[0].message.content.strip())
-        return result
-    except Exception as e:
-        return {
-            "error": f"AI 분석 중 오류가 발생했습니다: {str(e)}"
-        }
+            response = client.chat.completions.create(
+                model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.3,
+                top_p=0.95,
+                max_tokens=4096,
+                frequency_penalty=0,
+                presence_penalty=0,
+                stream=False
+            )
+            
+            choice = response.choices[0]
+            content = choice.message.content
+            
+            # 안전 필터 차단 감지
+            if content is None or choice.finish_reason == "content_filter":
+                # 요약본을 쓴 상태에서 차단된 경우, 초록 모드로 완전히 변경 후 재시도
+                if use_summaries:
+                    use_summaries = False
+                    continue
+                else:
+                    prompt_len = len(prompt)
+                    return {
+                        "error": f"AI 안전 필터(Content Filter) 작동으로 분석 결과를 생성할 수 없습니다. (디버그 정보 - Finish Reason: {choice.finish_reason}, Content: {'None' if content is None else 'Present'}, Prompt Length: {prompt_len} 자). 입력하신 원고 내용에 병원균/면역회피 등 민감 학술 키워드가 다수 포함되어 차단되었을 가능성이 높습니다."
+                    }
+            
+            import json
+            import re
+            
+            clean_content = content.strip()
+            # 마크다운 ```json 코드 블록 형태인 경우 내역 추출
+            if clean_content.startswith("```"):
+                match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", clean_content, re.DOTALL)
+                if match:
+                    clean_content = match.group(1)
+                else:
+                    lines = clean_content.splitlines()
+                    if lines[0].startswith("```"):
+                        lines = lines[1:]
+                    if lines and lines[-1].startswith("```"):
+                        lines = lines[:-1]
+                    clean_content = "\n".join(lines).strip()
+            
+            result = json.loads(clean_content)
+            return result
+        except Exception as e:
+            # 예외 발생 시 본문 사용 상태였다면 초록 모드로 재시도
+            if use_summaries:
+                use_summaries = False
+                continue
+            return {
+                "error": f"AI 분석 중 오류가 발생했습니다: {str(e)}"
+            }
 
 # ═══════════════════════════════════════════════════
 #  Streamlit UI — "Specimen Slide" Design (v3)
@@ -859,6 +1065,67 @@ st.markdown("""
         border-bottom: 1px solid var(--rule);
     }
 
+    /* ── Sub-scores Rubric ── */
+    .rubric-container {
+        background: var(--frost);
+        border: 1px solid var(--rule);
+        border-radius: 10px;
+        padding: 1.5rem 1.8rem;
+        margin-bottom: 1.5rem;
+    }
+    .rubric-title {
+        font-family: var(--ff-display) !important;
+        font-size: 0.88rem !important;
+        font-weight: 600 !important;
+        color: var(--buff) !important;
+        margin-bottom: 1.2rem;
+        border-bottom: 1px solid var(--rule);
+        padding-bottom: 0.5rem;
+    }
+    .rubric-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        margin-bottom: 1rem;
+    }
+    .rubric-item:last-child {
+        margin-bottom: 0;
+    }
+    .rubric-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+    }
+    .rubric-label {
+        font-family: var(--ff-display) !important;
+        font-size: 0.85rem !important;
+        font-weight: 500 !important;
+        color: var(--bone) !important;
+    }
+    .rubric-score {
+        font-family: var(--ff-data) !important;
+        font-size: 0.85rem !important;
+        font-weight: 600 !important;
+    }
+    .rubric-bar-bg {
+        height: 6px;
+        background: #1B1E2B;
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    .rubric-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.6s ease;
+    }
+    .rubric-rationale {
+        font-family: var(--ff-body) !important;
+        font-size: 0.78rem !important;
+        color: var(--dim) !important;
+        line-height: 1.45 !important;
+        margin-top: 0.15rem;
+    }
+
     /* ── Review items ── */
     .rv-item {
         display: flex;
@@ -1203,9 +1470,11 @@ if submit_button:
 
         # ── AI Review ──
         with st.spinner("AI 피어리뷰를 수행하고 있습니다..."):
+            # 컨텍스트 오버플로우 방지 및 효율적인 대조 분석을 위해 유사도 기준 상위 10개 논문만 AI 분석용으로 사용
+            review_papers = matching_papers[:10]
             analysis = analyze_manuscript(
                 abstract_text, target_journal, keywords,
-                matching_papers, is_api_key_valid, selected_key
+                review_papers, is_api_key_valid, selected_key
             )
 
         if "error" in analysis:
@@ -1244,6 +1513,45 @@ if submit_button:
                 </div>
             </div>
             """, unsafe_allow_html=True)
+
+            # ── Sub-scores Rubric ──
+            sub_scores = analysis.get("sub_scores", {})
+            rubric_html = ""
+            rubric_labels = {
+                "novelty": "학술적 신규성 & 개념적 진보 (Novelty & Advance)",
+                "methodology": "방법론적 엄밀성 & 대조군 (Methodology & Controls)",
+                "data_completeness": "데이터 완결성 & 통계 (Data & Statistics)",
+                "journal_fit": "저널 적합성 & 임팩트 (Journal Fit & Impact)",
+                "presentation": "논리 구조 & 논문 작성 품질 (Presentation & Writing)"
+            }
+            
+            for key, label in rubric_labels.items():
+                score_data = sub_scores.get(key, {"score": 50, "rationale": "N/A"})
+                sub_score = score_data.get("score", 50)
+                sub_rationale = score_data.get("rationale", "N/A")
+                
+                # Determine color for sub-score bar
+                bar_color = (
+                    "var(--viridian)" if sub_score >= 75
+                    else "var(--buff)" if sub_score >= 50
+                    else "var(--eosin)"
+                )
+                
+                rubric_html += f"""<div class="rubric-item">
+<div class="rubric-meta">
+<span class="rubric-label">{label}</span>
+<span class="rubric-score" style="color: {bar_color};">{sub_score}점</span>
+</div>
+<div class="rubric-bar-bg">
+<div class="rubric-bar-fill" style="width: {sub_score}%; background: {bar_color};"></div>
+</div>
+<div class="rubric-rationale">{sub_rationale}</div>
+</div>"""
+            
+            st.markdown(f"""<div class="rubric-container">
+<div class="rubric-title">📊 다차원 상세 심사 루브릭 (Evaluation Rubric)</div>
+{rubric_html}
+</div>""", unsafe_allow_html=True)
 
             # ── Journal fit ──
             journal_fit = analysis.get("journal_fit", "N/A")

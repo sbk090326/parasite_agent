@@ -355,6 +355,9 @@ st.markdown("""
     [data-testid="stTextInputRootElement"] button {
         color: var(--dim) !important;
     }
+    [data-testid="stTextInputRootElement"] button * {
+        font-family: 'Material Symbols Outlined', 'Material Symbols Rounded', 'Material Icons', inherit !important;
+    }
     
     .stTextArea > div > div > textarea {
         background-color: var(--frost) !important;
